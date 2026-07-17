@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fichar · Fichada QR</title>
+<style>
+  :root{
+    --bg:#eef1f2; --surface:#fff; --surface-2:#f5f8f8; --border:#d7dee0;
+    --ink:#16211f; --muted:#5c6b6a; --accent:#0d7d84; --accent-ink:#0a5f65;
+    --ok:#15803d; --ok-bg:#e7f4ec; --warn:#b45309; --warn-bg:#fbf0e2;
+    --bad:#b91c1c; --bad-bg:#fbe9e9;
+    --shadow:0 1px 2px rgba(16,33,31,.06),0 8px 24px rgba(16,33,31,.07);
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0c1315; --surface:#141e21; --surface-2:#182529; --border:#26343a;
+    --ink:#e8f0ef; --muted:#94a5a4; --accent:#2bb7bf; --accent-ink:#7fdce0;
+    --ok:#34d399; --ok-bg:#12241c; --warn:#f0a44a; --warn-bg:#241a10;
+    --bad:#f87171; --bad-bg:#251316;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;min-height:100vh;display:grid;place-items:start center;padding:24px 16px 40px;}
+  .wrap{max-width:440px;width:100%;}
+  header{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+  .mark{width:32px;height:32px;border-radius:9px;background:var(--accent);position:relative;flex:0 0 auto;}
+  .mark::before,.mark::after{content:"";position:absolute;border:3px solid #fff;border-radius:3px;}
+  .mark::before{width:11px;height:11px;top:6px;left:6px;}
+  .mark::after{width:6px;height:6px;bottom:7px;right:7px;background:#fff;border:none;}
+  header b{font-size:15px;letter-spacing:-.2px;}
+  header span{display:block;font-size:11px;color:var(--muted);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:22px;}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--muted);}
+  .avatar{width:56px;height:56px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);
+    display:grid;place-items:center;margin:8px auto 12px;font-size:24px;font-weight:700;color:var(--accent-ink);}
+  h1{font-size:19px;margin:2px 0 4px;letter-spacing:-.3px;text-align:center;}
+  .sub{margin:0;color:var(--muted);font-size:13px;text-align:center;}
+  .email{font-family:var(--mono);font-size:14px;color:var(--accent-ink);word-break:break-all;text-align:center;
+    background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin:14px 0 4px;}
+  .btn{display:block;width:100%;border:none;border-radius:12px;font-family:var(--sans);font-size:15px;
+    font-weight:650;padding:14px;cursor:pointer;transition:.15s;}
+  .btn-primary{background:var(--accent);color:#fff;margin-top:16px;box-shadow:var(--shadow);}
+  .btn-primary:active{transform:translateY(1px)}
+  .btn-primary:disabled{opacity:.55;cursor:default}
+  .btn-ghost{background:transparent;color:var(--muted);font-weight:600;font-size:13.5px;padding:10px;margin-top:8px;}
+  .picklist{margin-top:8px;display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto;}
+  .picklist input{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);
+    background:var(--surface-2);color:var(--ink);font-family:var(--sans);font-size:14px;margin-bottom:4px;}
+  .pick{display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--border);border-radius:11px;
+    background:var(--surface);cursor:pointer;text-align:left;font-family:var(--mono);font-size:13px;color:var(--ink);}
+  .pick:hover{border-color:var(--accent);background:var(--surface-2)}
+  .pick .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+  .result{text-align:center}
+  .badge{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;margin:6px auto 14px;font-size:38px;}
+  .badge.ok{background:var(--ok-bg);color:var(--ok)} .badge.warn{background:var(--warn-bg);color:var(--warn)}
+  .badge.bad{background:var(--bad-bg);color:var(--bad)}
+  .result .big-time{font-family:var(--mono);font-size:30px;font-weight:700;margin:10px 0 2px;color:var(--ink);}
+  .result p{color:var(--muted);font-size:13.5px;margin:0}
+  .hidden{display:none!important}
+  footer{text-align:center;margin-top:18px;font-size:11px;color:var(--muted)}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark"></div>
+    <div><b>Fichada QR</b><span>Registrar presencia</span></div>
+  </header>
+
+  <div class="card">
+    <!-- estado: cargando token -->
+    <div id="s-loading" class="result">
+      <div class="avatar">…</div>
+      <p class="sub">Verificando el código…</p>
+    </div>
+
+    <!-- estado: confirmar -->
+    <div id="s-confirm" class="hidden">
+      <div style="text-align:center"><span class="eyebrow">Fichada de hoy</span></div>
+      <div class="avatar" id="initial">?</div>
+      <h1>¿Sos vos?</h1>
+      <p class="sub">Confirmá tu correo para registrar la fichada.</p>
+      <div class="email" id="email">—</div>
+      <button class="btn btn-primary" id="btn-confirm">Confirmar fichada</button>
+      <button class="btn btn-ghost" id="btn-other">No soy yo — elegir otro correo</button>
+    </div>
+
+    <!-- estado: elegir correo -->
+    <div id="s-list" class="hidden">
+      <span class="eyebrow">Elegí tu correo</span>
+      <div class="picklist" id="picks"></div>
+      <button class="btn btn-ghost" id="btn-back">← Volver</button>
+    </div>
+
+    <!-- estado: resultado -->
+    <div id="s-result" class="hidden result"></div>
+  </div>
+
+  <footer>Sin ubicación · una fichada por día · código de un solo uso</footer>
+</div>
+
+<script>
+/* ============================================================================
+   CONFIG — completar cuando se conecte Supabase (ver DISENO.md)
+   ----------------------------------------------------------------------------
+   const SUPABASE_URL   = "https://<ref>.supabase.co";
+   const SUPABASE_ANON  = "<anon key>";
+   La función Edge `fichar` valida: firma del token + vencimiento + uso único +
+   correo habilitado + no fichó hoy, y registra la fichada.
+   ==========================================================================*/
+const USING_BACKEND = false; // ← pasar a true cuando exista la Edge Function
+
+// Datos de ejemplo mientras no hay backend (reemplazar por lista real de Supabase)
+const EMAILS = [
+  "martina.gomez@fabrica.com","lucas.perez@fabrica.com","sofia.ramirez@fabrica.com",
+  "diego.fernandez@fabrica.com","valen.torres@fabrica.com","agus.medina@fabrica.com",
+  "cami.rojas@fabrica.com","nico.alvarez@fabrica.com"
+];
+
+const token = new URLSearchParams(location.search).get("t"); // token del QR
+let currentEmail = EMAILS[0];
+
+const $ = id => document.getElementById(id);
+function show(state){["s-loading","s-confirm","s-list","s-result"].forEach(s=>
+  $(s).classList.toggle("hidden", s!==state));}
+function pad(n){return String(n).padStart(2,"0");}
+
+function setEmail(e){
+  currentEmail=e;
+  $("email").textContent=e;
+  $("initial").textContent=e[0].toUpperCase();
+}
+
+function toConfirm(){ setEmail(currentEmail); show("s-confirm"); }
+
+function buildList(){
+  const box=$("picks");
+  box.innerHTML='<input id="search" placeholder="Buscar correo…" autocomplete="off">';
+  EMAILS.forEach(e=>{
+    const b=document.createElement("button");
+    b.className="pick"; b.dataset.email=e;
+    b.innerHTML='<span class="dot"></span>'+e;
+    b.onclick=()=>{setEmail(e);show("s-confirm");};
+    box.appendChild(b);
+  });
+  $("search").oninput=()=>{
+    const q=$("search").value.toLowerCase();
+    box.querySelectorAll(".pick").forEach(p=>p.classList.toggle("hidden",!p.dataset.email.includes(q)));
+  };
+}
+
+function result({icon,cls,title,timeBig,text,btn}){
+  $("s-result").innerHTML=
+    `<div class="badge ${cls}">${icon}</div><h1>${title}</h1>`+
+    (timeBig?`<div class="big-time">${timeBig}</div>`:"")+
+    `<p>${text}</p><button class="btn btn-ghost" id="r-btn">${btn||"Listo"}</button>`;
+  show("s-result");
+  $("r-btn").onclick=()=>toConfirm();
+}
+
+async function fichar(){
+  $("btn-confirm").disabled=true;
+  const now=new Date(), hhmm=pad(now.getHours())+":"+pad(now.getMinutes());
+
+  if(!USING_BACKEND){
+    // --- MODO DEMO (sin backend) ---
+    if(!token){ result({icon:"↻",cls:"bad",title:"Falta el código",
+      text:"Abrí esta página escaneando el QR de la pantalla del trabajo.",btn:"Entendido"}); return; }
+    result({icon:"✓",cls:"ok",title:"¡Fichada registrada!",timeBig:hhmm,
+      text:`${currentEmail}<br>Que tengas buen día 👋`});
+    return;
+  }
+
+  // --- MODO REAL (Supabase Edge Function) ---
+  try{
+    const r=await fetch(`${SUPABASE_URL}/functions/v1/fichar`,{
+      method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON},
+      body:JSON.stringify({token,email:currentEmail})
+    });
+    const d=await r.json();
+    if(d.ok) result({icon:"✓",cls:"ok",title:"¡Fichada registrada!",timeBig:d.hora||hhmm,
+      text:`${currentEmail}<br>Que tengas buen día 👋`});
+    else if(d.error==="ya_ficho") result({icon:"⏱",cls:"warn",title:"Ya fichaste hoy",
+      text:`Tu fichada de hoy quedó a las <b>${d.hora}</b>. Solo una vez por día.`,btn:"Entendido"});
+    else if(d.error==="token_vencido"||d.error==="token_usado") result({icon:"↻",cls:"bad",
+      title:"El código venció",text:"Volvé a la pantalla del trabajo y escaneá el código actual.",btn:"Reintentar"});
+    else if(d.error==="no_habilitado") result({icon:"✕",cls:"bad",title:"Correo no habilitado",
+      text:`<b>${currentEmail}</b> no está en la lista. Avisá a administración.`,btn:"Volver"});
+    else result({icon:"✕",cls:"bad",title:"No se pudo fichar",text:"Probá de nuevo en un momento.",btn:"Reintentar"});
+  }catch(e){
+    result({icon:"✕",cls:"bad",title:"Sin conexión",text:"Revisá tu conexión e intentá otra vez.",btn:"Reintentar"});
+  }finally{ $("btn-confirm").disabled=false; }
+}
+
+$("btn-confirm").onclick=fichar;
+$("btn-other").onclick=()=>{buildList();show("s-list");};
+$("btn-back").onclick=()=>show("s-confirm");
+
+// arranque
+setTimeout(()=>{ toConfirm(); }, 400); // pequeño "verificando…" para UX
+</script>
+</body>
+</html>

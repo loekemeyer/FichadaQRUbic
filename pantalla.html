@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pantalla · Fichada QR</title>
+<style>
+  :root{
+    --bg:#eef1f2; --surface:#fff; --surface-2:#f5f8f8; --border:#d7dee0;
+    --ink:#16211f; --muted:#5c6b6a; --accent:#0d7d84; --accent-ink:#0a5f65; --ring-track:#e2e8e9;
+    --shadow:0 1px 2px rgba(16,33,31,.06),0 10px 30px rgba(16,33,31,.08);
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0c1315; --surface:#141e21; --surface-2:#182529; --border:#26343a;
+    --ink:#e8f0ef; --muted:#94a5a4; --accent:#2bb7bf; --accent-ink:#7fdce0; --ring-track:#25333a;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.4);}}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;display:grid;place-items:center;padding:24px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:24px;box-shadow:var(--shadow);
+    padding:34px 34px 28px;text-align:center;max-width:420px;width:100%;}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+  h1{font-size:clamp(22px,5vw,28px);margin:10px 0 4px;letter-spacing:-.4px;}
+  .sub{margin:0;color:var(--muted);font-size:14px;}
+  .stage{position:relative;width:min(300px,72vw);height:min(300px,72vw);margin:26px auto 10px;display:grid;place-items:center;}
+  .ring{position:absolute;inset:0;transform:rotate(-90deg)}
+  .ring circle{fill:none;stroke-width:6;stroke-linecap:round}
+  .ring .track{stroke:var(--ring-track)} .ring .prog{stroke:var(--accent);transition:stroke-dashoffset 1s linear}
+  .frame{width:76%;height:76%;background:#fff;border-radius:14px;padding:14px;display:grid;place-items:center;
+    box-shadow:0 0 0 1px var(--border)}
+  #qr{width:100%;height:100%;display:grid;place-items:center}
+  #qr img,#qr canvas{width:100%!important;height:100%!important;image-rendering:pixelated}
+  .meta{display:flex;justify-content:center;gap:26px;margin-top:14px}
+  .meta .k{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted)}
+  .meta .v{font-family:var(--mono);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+  .foot{margin-top:20px;font-size:13px;color:var(--muted);line-height:1.5}
+  .foot b{color:var(--ink);font-weight:600}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+  <div class="card">
+    <span class="eyebrow">Fichada · Punto de trabajo</span>
+    <h1>Escaneá para fichar</h1>
+    <p class="sub">El código cambia cada 30 segundos</p>
+
+    <div class="stage">
+      <svg class="ring" viewBox="0 0 300 300" aria-hidden="true">
+        <circle class="track" cx="150" cy="150" r="144"></circle>
+        <circle class="prog" id="ring" cx="150" cy="150" r="144"></circle>
+      </svg>
+      <div class="frame"><div id="qr"></div></div>
+    </div>
+
+    <div class="meta">
+      <div><div class="k">Vence en</div><div class="v" id="count">30s</div></div>
+      <div><div class="k">Hora</div><div class="v" id="clock">--:--</div></div>
+    </div>
+
+    <p class="foot">Fichá <b>solo desde acá</b>. Este código vale unos segundos:<br>una captura enviada a otra persona ya no sirve.</p>
+  </div>
+
+<!-- Librería de QR (se carga en el navegador, no requiere backend) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+/* ============================================================================
+   CONFIG
+   BASE_URL: dónde está publicada fichar.html (ej. GitHub Pages).
+   PERIOD:   segundos de vida de cada código (30 recomendado).
+
+   MODO REAL (cuando exista Supabase): en vez de generar el token acá,
+   esta pantalla debe pedirlo cada ~25s a la Edge Function `emitir-token`
+   (protegida por una clave de dispositivo). Ver DISENO.md.
+   ==========================================================================*/
+const BASE_URL = location.origin + location.pathname.replace(/pantalla\.html$/,"") + "fichar.html";
+const PERIOD = 30;
+
+const qr = new QRCode(document.getElementById("qr"),
+  {text:"", width:512, height:512, correctLevel:QRCode.CorrectLevel.M});
+
+const RING_LEN = 2*Math.PI*144;
+document.getElementById("ring").style.strokeDasharray = RING_LEN;
+let left = PERIOD;
+
+function pad(n){return String(n).padStart(2,"0");}
+function newToken(){
+  return "fh_"+Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,6);
+}
+function rotate(){
+  const t = newToken();
+  qr.clear();
+  qr.makeCode(BASE_URL + "?t=" + t);
+  left = PERIOD;
+}
+function tick(){
+  const now = new Date();
+  document.getElementById("clock").textContent = pad(now.getHours())+":"+pad(now.getMinutes());
+  left -= 1;
+  if(left <= 0) rotate();
+  document.getElementById("count").textContent = Math.max(left,0)+"s";
+  document.getElementById("ring").style.strokeDashoffset = RING_LEN*(1 - left/PERIOD);
+}
+rotate();
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

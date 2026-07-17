@@ -205,6 +205,35 @@ está en GitHub, gratis), Vercel o Netlify. **Sin definir todavía.**
 
 ---
 
+## 6.b Estado actual — prototipo construido (Fase 1 en curso)
+
+Ya está el **prototipo visual/UX** en el repo, listo para publicar en GitHub
+Pages. **Todavía sin backend conectado** (usa datos de ejemplo).
+
+Archivos:
+
+- **`index.html`** — entrada con dos accesos (Pantalla / Fichar).
+- **`pantalla.html`** — pantalla del dispositivo fijo. Genera un **QR real y
+  escaneable** que **rota cada 30 s** (usa la librería `qrcodejs` por CDN, que
+  corre en el navegador). El QR apunta a `fichar.html?t=<token>`.
+- **`fichar.html`** — pantalla que se abre al escanear. Confirma el correo
+  (lista de ejemplo), con estados: fichada OK, ya fichó hoy, código vencido,
+  correo no habilitado. Tiene una constante `USING_BACKEND` y el `fetch` a la
+  Edge Function `fichar` ya escrito, listo para activar.
+
+Además hay un **prototipo interactivo publicado** (solo UX, datos de ejemplo,
+QR representativo no escaneable) para ver desde el celular sin desplegar nada.
+
+Para dejarlo online real en el repo: activar **GitHub Pages** (Settings → Pages
+→ Source: `main` / carpeta raíz). Queda en `https://<usuario>.github.io/FichadaQRUbic/`.
+
+Pendiente de Fase 1 para que sea funcional de verdad:
+- Crear tablas en Supabase y las Edge Functions (`emitir-token`, `fichar`).
+- Que `pantalla.html` pida el token a `emitir-token` (con clave de dispositivo)
+  en vez de generarlo en el navegador.
+- Poner `USING_BACKEND = true` y cargar `SUPABASE_URL` / `SUPABASE_ANON`.
+- Cargar la lista real de correos en la tabla `empleados`.
+
 ## 7. Plan de trabajo
 
 - [ ] **Fase 1 (este repo, `FichadaQRUbic`):** construir el MVP funcional
