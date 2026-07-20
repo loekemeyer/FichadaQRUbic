@@ -122,26 +122,27 @@ truncate "FichadaQR".fichadas, "FichadaQR".tokens_usados;
 La validación de "correo habilitado" la resuelve `FichadaQR.esta_habilitado(correo)`,
 que lee de una **fuente configurable** en `FichadaQR.config`:
 
-- Por defecto: **`planify.empleados`** (columna de correo **autodetectada** entre
-  `Email` / `gmail` / `correo` / `mail`).
-- **Mientras `planify.empleados` no exista**, usa como **respaldo** la lista propia
-  `FichadaQR.empleados` (hoy tiene los 8 correos de ejemplo).
-- Apenas se cree `planify.empleados`, la fichada **pasa a usarla sola**, sin tocar
-  ni redeployar nada.
+- Por defecto: **`planify.employees`** (en inglés). Autodetecta la columna de
+  correo (`Email` / `gmail` / `correo` / `mail`) y, si hay columna de activo
+  (`activo` / `active` / …), **filtra solo los activos**.
+- **Estado actual:** `planify.employees` ya existe pero **todavía no tiene columna
+  de email** — hasta que la agreguen, la fichada usa como **respaldo** la lista
+  propia `FichadaQR.empleados` (8 correos de ejemplo).
+- Apenas `planify.employees` tenga la columna de email, la fichada **pasa a usarla
+  sola** (y aplica el filtro de `activo`), sin tocar ni redeployar nada.
 
 Cambiar la fuente (si el schema/tabla/columna fueran otros):
 
 ```sql
 update "FichadaQR".config
    set fuente_schema  = 'planify',
-       fuente_tabla   = 'empleados',
+       fuente_tabla   = 'employees',
        fuente_columna = null   -- null = autodetectar Email/gmail/correo/mail
  where id = 1;
 ```
 
-> Supuesto: **estar presente** en `planify.empleados` = habilitado. Si esa tabla
-> trae un flag de activo/estado y hay que filtrar por él, se agrega una línea a
-> `FichadaQR.esta_habilitado`.
+> `activo` se interpreta permisivo: `true` o `null` = habilitado; solo `false`
+> queda afuera (igual criterio que la lista propia).
 
 Cargar/editar la lista de respaldo propia (opcional):
 

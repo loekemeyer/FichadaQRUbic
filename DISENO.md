@@ -204,10 +204,11 @@ está en GitHub, gratis), Vercel o Netlify. **Sin definir todavía.**
    Netlify / Supabase.
 3. **IP del trabajo** para activar la capa opcional (columna `config.ip_trabajo`
    ya preparada; falta el chequeo en la Edge Function y pasar la IP real).
-4. **Correos habilitados:** la fuente es **`planify.empleados`** (columna
-   `Email`/`gmail`, autodetectada). Esa tabla **se está creando**; mientras tanto
-   la fichada usa como respaldo la lista propia `FichadaQR.empleados` y cambia
-   sola a `planify.empleados` en cuanto exista (ver `supabase/README.md`).
+4. **Correos habilitados:** la fuente es **`planify.employees`** (columna
+   `Email`/`gmail`, autodetectada; filtra por `activo`). La tabla ya existe pero
+   **aún sin la columna de email**; mientras tanto la fichada usa como respaldo
+   la lista propia `FichadaQR.empleados` y cambia sola a `planify.employees` en
+   cuanto tenga la columna (ver `supabase/README.md`).
 
 ---
 
