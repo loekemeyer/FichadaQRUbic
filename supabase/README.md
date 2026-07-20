@@ -144,6 +144,25 @@ update "FichadaQR".config
 > `activo` se interpreta permisivo: `true` o `null` = habilitado; solo `false`
 > queda afuera (igual criterio que la lista propia).
 
+### Nota de seguridad sobre `planify.employees` (hallazgo de esta fase)
+
+Al conectar la fuente se detectó que `planify.employees` estaba **expuesta en la
+Data API** con una política `emp_select USING (true)` para `public` y una columna
+`password` (PIN de 4 dígitos en **texto plano**): cualquiera con la clave pública
+podía leer los PINs de todos los empleados. Se cerró así:
+
+- Se creó la vista **`planify.employees_publica`** (sin `password` / `telefono` /
+  `fecha_nacimiento`) para lecturas públicas.
+- Se **revocó `SELECT` sobre `planify.employees` al rol `anon`** (la clave pública
+  ya no lee la tabla base). Los usuarios logueados (`authenticated`) no se tocaron.
+- La fichada no se ve afectada: lee `planify.employees` como `service_role` (server-side).
+
+Rollback si hiciera falta: `grant select on planify.employees to anon;`
+
+Pendiente (fuera del alcance de la fichada): los usuarios `authenticated` todavía
+pueden leer los PIN de todos (misma política `USING (true)`), y los PIN están en
+texto plano — conviene restringir por usuario/rol y hashearlos.
+
 Cargar/editar la lista de respaldo propia (opcional):
 
 ```sql
