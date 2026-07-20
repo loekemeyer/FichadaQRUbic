@@ -117,13 +117,45 @@ Después de probar, limpiá las fichadas de prueba:
 truncate "FichadaQR".fichadas, "FichadaQR".tokens_usados;
 ```
 
-## Cargar la lista real de correos
+## Lista de correos habilitados (fuente configurable)
+
+La validación de "correo habilitado" la resuelve `FichadaQR.esta_habilitado(correo)`,
+que lee de una **fuente configurable** en `FichadaQR.config`:
+
+- Por defecto: **`planify.empleados`** (columna de correo **autodetectada** entre
+  `Email` / `gmail` / `correo` / `mail`).
+- **Mientras `planify.empleados` no exista**, usa como **respaldo** la lista propia
+  `FichadaQR.empleados` (hoy tiene los 8 correos de ejemplo).
+- Apenas se cree `planify.empleados`, la fichada **pasa a usarla sola**, sin tocar
+  ni redeployar nada.
+
+Cambiar la fuente (si el schema/tabla/columna fueran otros):
+
+```sql
+update "FichadaQR".config
+   set fuente_schema  = 'planify',
+       fuente_tabla   = 'empleados',
+       fuente_columna = null   -- null = autodetectar Email/gmail/correo/mail
+ where id = 1;
+```
+
+> Supuesto: **estar presente** en `planify.empleados` = habilitado. Si esa tabla
+> trae un flag de activo/estado y hay que filtrar por él, se agrega una línea a
+> `FichadaQR.esta_habilitado`.
+
+Cargar/editar la lista de respaldo propia (opcional):
 
 ```sql
 insert into "FichadaQR".empleados (correo, nombre) values
   ('nombre.apellido@empresa.com','Nombre Apellido')
 on conflict (correo) do nothing;
 ```
+
+> Nota UX pendiente: el selector de correos de `fichar.html` todavía tiene una
+> lista de ejemplo hardcodeada. La validación real ya es server-side (un correo
+> fuera de la fuente da `no_habilitado`), pero para que cada persona pueda
+> **elegirse** conviene que ese selector también salga de `planify.empleados`
+> (falta un endpoint de solo-lectura para listarlos).
 
 ## Archivos
 
