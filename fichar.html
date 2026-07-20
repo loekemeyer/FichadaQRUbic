@@ -104,14 +104,16 @@
 
 <script>
 /* ============================================================================
-   CONFIG — completar cuando se conecte Supabase (ver DISENO.md)
+   CONFIG — backend conectado (proyecto Supabase "Control Partes Talleristas",
+   schema aislado FichadaQR). Ver DISENO.md.
    ----------------------------------------------------------------------------
-   const SUPABASE_URL   = "https://<ref>.supabase.co";
-   const SUPABASE_ANON  = "<anon key>";
-   La función Edge `fichar` valida: firma del token + vencimiento + uso único +
-   correo habilitado + no fichó hoy, y registra la fichada.
+   La Edge Function `fichada-qr-fichar` valida: firma del token + vencimiento +
+   correo habilitado + no fichó hoy, y registra la fichada. El secreto de firma
+   vive solo en el servidor: una foto de un código vencido es rechazada.
    ==========================================================================*/
-const USING_BACKEND = false; // ← pasar a true cuando exista la Edge Function
+const USING_BACKEND = true;
+const SUPABASE_URL  = "https://hrxfctzncixxqmpfhskv.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyeGZjdHpuY2l4eHFtcGZoc2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjQyNjEsImV4cCI6MjA4ODMwMDI2MX0.4L6wguch8UZGhC2VpzrWcCjJGUV-IkYsl9JoCWrOLUs";
 
 // Datos de ejemplo mientras no hay backend (reemplazar por lista real de Supabase)
 const EMAILS = [
@@ -176,8 +178,8 @@ async function fichar(){
 
   // --- MODO REAL (Supabase Edge Function) ---
   try{
-    const r=await fetch(`${SUPABASE_URL}/functions/v1/fichar`,{
-      method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON},
+    const r=await fetch(`${SUPABASE_URL}/functions/v1/fichada-qr-fichar`,{
+      method:"POST",headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON,"Authorization":"Bearer "+SUPABASE_ANON},
       body:JSON.stringify({token,email:currentEmail})
     });
     const d=await r.json();
@@ -185,7 +187,7 @@ async function fichar(){
       text:`${currentEmail}<br>Que tengas buen día 👋`});
     else if(d.error==="ya_ficho") result({icon:"⏱",cls:"warn",title:"Ya fichaste hoy",
       text:`Tu fichada de hoy quedó a las <b>${d.hora}</b>. Solo una vez por día.`,btn:"Entendido"});
-    else if(d.error==="token_vencido"||d.error==="token_usado") result({icon:"↻",cls:"bad",
+    else if(d.error==="token_vencido"||d.error==="token_usado"||d.error==="token_invalido") result({icon:"↻",cls:"bad",
       title:"El código venció",text:"Volvé a la pantalla del trabajo y escaneá el código actual.",btn:"Reintentar"});
     else if(d.error==="no_habilitado") result({icon:"✕",cls:"bad",title:"Correo no habilitado",
       text:`<b>${currentEmail}</b> no está en la lista. Avisá a administración.`,btn:"Volver"});

@@ -123,6 +123,7 @@ red WiFi del trabajo**. No molesta a nadie y suma una segunda barrera.
 | Dispositivo on-site | **Sí, el usuario tiene** un dispositivo para dejar fijo mostrando el QR |
 | Fuente de correos / datos | **Supabase** |
 | Organización Supabase | `Gestion Productiva` (`azosplccoimzkdtbvzfi`) |
+| Proyecto Supabase | **`Control Partes Talleristas`** (`hrxfctzncixxqmpfhskv`), en un **schema aislado `FichadaQR`** para no tocar la fichada de producción que ya vive en `public` |
 | Coordenadas / radio en metros | **Descartado** (ya no se usa geolocalización) |
 
 ### Proyectos Supabase existentes en la org (al 2026-07-16)
@@ -197,11 +198,14 @@ está en GitHub, gratis), Vercel o Netlify. **Sin definir todavía.**
 
 ## 6. Decisiones que quedaron pendientes
 
-1. **Supabase:** ¿proyecto **nuevo** (ej. "FichadaQR") o reusar uno existente?
+1. ~~**Supabase:** ¿proyecto nuevo o reusar uno existente?~~ **RESUELTO:** se
+   reusa `Control Partes Talleristas` con un schema aislado `FichadaQR`.
 2. **Hosting** de `pantalla.html` y `fichar.html`: GitHub Pages / Vercel /
    Netlify / Supabase.
-3. **IP del trabajo** para activar la capa opcional (se puede dejar para después).
-4. **Carga inicial de correos** en `empleados` (lista real de la fábrica).
+3. **IP del trabajo** para activar la capa opcional (columna `config.ip_trabajo`
+   ya preparada; falta el chequeo en la Edge Function y pasar la IP real).
+4. **Carga inicial de correos** en `empleados` (hoy están los 8 de ejemplo; falta
+   la lista real de la fábrica).
 
 ---
 
@@ -227,12 +231,38 @@ QR representativo no escaneable) para ver desde el celular sin desplegar nada.
 Para dejarlo online real en el repo: activar **GitHub Pages** (Settings → Pages
 → Source: `main` / carpeta raíz). Queda en `https://<usuario>.github.io/FichadaQRUbic/`.
 
-Pendiente de Fase 1 para que sea funcional de verdad:
-- Crear tablas en Supabase y las Edge Functions (`emitir-token`, `fichar`).
-- Que `pantalla.html` pida el token a `emitir-token` (con clave de dispositivo)
-  en vez de generarlo en el navegador.
-- Poner `USING_BACKEND = true` y cargar `SUPABASE_URL` / `SUPABASE_ANON`.
-- Cargar la lista real de correos en la tabla `empleados`.
+## 6.c Estado actual — **backend conectado** (Fase 1 casi cerrada)
+
+El backend ya está creado, desplegado y **probado** en Supabase (proyecto
+`Control Partes Talleristas`, schema `FichadaQR`). Detalle completo en
+[`supabase/README.md`](supabase/README.md). Resumen:
+
+- **Tablas** (`FichadaQR`): `empleados`, `fichadas` (`UNIQUE(correo,fecha)` = 1/día),
+  `tokens_usados`, `config` (secreto de firma + clave de dispositivo + TTL).
+- **Lógica** en funciones SQL `public.fichadaqr_emitir_token` y
+  `public.fichadaqr_fichar` (firma HMAC-SHA256 con `pgcrypto`, validación de
+  vencimiento, correo habilitado y 1/día). Solo `service_role` las ejecuta.
+- **Edge Functions** (cáscara HTTP + CORS): `fichada-qr-emitir-token` y
+  `fichada-qr-fichar`.
+- **`pantalla.html`** ya pide el token firmado a `fichada-qr-emitir-token`
+  (clave de dispositivo por URL: `pantalla.html#clave=...`).
+- **`fichar.html`** ya tiene `USING_BACKEND = true` y pega contra
+  `fichada-qr-fichar`.
+
+**Prueba hecha (vía SQL, la lógica real):** código válido → OK; mismo correo de
+nuevo → `ya_ficho`; correo no habilitado → `no_habilitado`; token adulterado →
+`token_invalido`; **código vencido → `token_vencido`** (una foto vieja ya no
+sirve). ✅
+
+Pendiente de Fase 1:
+- **Probar el flujo completo en el navegador** (escanear → fichar). El test HTTP
+  de las Edge Functions no se pudo correr desde el entorno de desarrollo porque
+  su red bloquea la salida a Supabase; hay un script `curl` listo en
+  `supabase/README.md` para correr desde una máquina con internet.
+- **Cargar la lista real de correos** en `FichadaQR.empleados`.
+- (Opcional) que `fichar.html` traiga la lista de correos desde la base en vez
+  de tenerla hardcodeada.
+- (Opcional) activar el chequeo de **IP del trabajo**.
 
 ## 7. Plan de trabajo
 

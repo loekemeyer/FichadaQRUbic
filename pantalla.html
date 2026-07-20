@@ -61,22 +61,30 @@
     </div>
 
     <p class="foot">Fichá <b>solo desde acá</b>. Este código vale unos segundos:<br>una captura enviada a otra persona ya no sirve.</p>
+    <p class="foot" id="err" style="color:#c0392b;font-weight:600;display:none"></p>
   </div>
 
 <!-- Librería de QR (se carga en el navegador, no requiere backend) -->
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
 /* ============================================================================
-   CONFIG
-   BASE_URL: dónde está publicada fichar.html (ej. GitHub Pages).
-   PERIOD:   segundos de vida de cada código (30 recomendado).
+   CONFIG — backend conectado (Supabase "Control Partes Talleristas", schema
+   FichadaQR). BASE_URL: dónde está publicada fichar.html. PERIOD: segundos que
+   se muestra cada código en pantalla.
 
-   MODO REAL (cuando exista Supabase): en vez de generar el token acá,
-   esta pantalla debe pedirlo cada ~25s a la Edge Function `emitir-token`
-   (protegida por una clave de dispositivo). Ver DISENO.md.
+   El token lo genera y FIRMA el servidor (Edge Function fichada-qr-emitir-token),
+   protegido por una CLAVE DE DISPOSITIVO. Abrí esta pantalla con la clave en la
+   URL:  pantalla.html#clave=TU_CLAVE   (la clave no se guarda en el archivo).
+   Ver DISENO.md.
    ==========================================================================*/
+const USING_BACKEND = true;
+const SUPABASE_URL  = "https://hrxfctzncixxqmpfhskv.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyeGZjdHpuY2l4eHFtcGZoc2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjQyNjEsImV4cCI6MjA4ODMwMDI2MX0.4L6wguch8UZGhC2VpzrWcCjJGUV-IkYsl9JoCWrOLUs";
+const FN_EMITIR     = SUPABASE_URL + "/functions/v1/fichada-qr-emitir-token";
+
 const BASE_URL = location.origin + location.pathname.replace(/pantalla\.html$/,"") + "fichar.html";
 const PERIOD = 30;
+const CLAVE = new URLSearchParams((location.hash||"").replace(/^#/,"")).get("clave") || "";
 
 const qr = new QRCode(document.getElementById("qr"),
   {text:"", width:512, height:512, correctLevel:QRCode.CorrectLevel.M});
@@ -84,16 +92,47 @@ const qr = new QRCode(document.getElementById("qr"),
 const RING_LEN = 2*Math.PI*144;
 document.getElementById("ring").style.strokeDasharray = RING_LEN;
 let left = PERIOD;
+let rotando = false;
 
 function pad(n){return String(n).padStart(2,"0");}
-function newToken(){
+function setErr(msg){
+  const e = document.getElementById("err");
+  e.textContent = msg || "";
+  e.style.display = msg ? "block" : "none";
+}
+function newToken(){ // solo modo demo (sin backend)
   return "fh_"+Math.random().toString(36).slice(2,10)+Math.random().toString(36).slice(2,6);
 }
-function rotate(){
-  const t = newToken();
-  qr.clear();
-  qr.makeCode(BASE_URL + "?t=" + t);
-  left = PERIOD;
+async function pedirToken(){
+  const r = await fetch(FN_EMITIR,{
+    method:"POST",
+    headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON,
+             "Authorization":"Bearer "+SUPABASE_ANON,"x-clave-dispositivo":CLAVE},
+    body:"{}"
+  });
+  const d = await r.json();
+  if(!d.token) throw new Error(d.error || "sin_token");
+  return d.token;
+}
+async function rotate(){
+  if(rotando) return;
+  if(USING_BACKEND && !CLAVE){
+    setErr("Abrí esta pantalla con la clave:  pantalla.html#clave=TU_CLAVE");
+    return;
+  }
+  rotando = true;
+  try{
+    const t = USING_BACKEND ? await pedirToken() : newToken();
+    qr.clear();
+    qr.makeCode(BASE_URL + "?t=" + t);
+    left = PERIOD;
+    setErr("");
+  }catch(e){
+    setErr(e.message === "clave_invalida"
+      ? "Clave de dispositivo inválida."
+      : "No se pudo generar el código. Revisá la conexión.");
+    left = 5; // reintentar pronto
+  }finally{ rotando = false; }
 }
 function tick(){
   const now = new Date();
