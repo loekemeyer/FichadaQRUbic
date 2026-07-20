@@ -140,7 +140,8 @@ function toConfirm(){ setEmail(currentEmail); show("s-confirm"); }
 
 function buildList(){
   const box=$("picks");
-  box.innerHTML='<input id="search" placeholder="Buscar correo…" autocomplete="off">';
+  box.innerHTML='<input id="search" placeholder="Escribí o buscá tu correo…" autocomplete="off" inputmode="email">'
+    +'<button id="use-typed" class="pick hidden" style="border-color:var(--accent)"></button>';
   EMAILS.forEach(e=>{
     const b=document.createElement("button");
     b.className="pick"; b.dataset.email=e;
@@ -148,9 +149,22 @@ function buildList(){
     b.onclick=()=>{setEmail(e);show("s-confirm");};
     box.appendChild(b);
   });
+  const useBtn=$("use-typed");
+  useBtn.onclick=()=>{ setEmail(useBtn.dataset.email); show("s-confirm"); };
   $("search").oninput=()=>{
-    const q=$("search").value.toLowerCase();
-    box.querySelectorAll(".pick").forEach(p=>p.classList.toggle("hidden",!p.dataset.email.includes(q)));
+    const q=$("search").value.trim().toLowerCase();
+    box.querySelectorAll(".pick:not(#use-typed)").forEach(p=>
+      p.classList.toggle("hidden",!p.dataset.email.includes(q)));
+    // permitir usar un correo escrito (no está en la lista de ejemplo): el server valida contra planify
+    const esCorreo=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q);
+    const yaEsta=EMAILS.some(e=>e.toLowerCase()===q);
+    if(esCorreo && !yaEsta){
+      useBtn.dataset.email=q;
+      useBtn.innerHTML='<span class="dot"></span>Usar «'+q+'»';
+      useBtn.classList.remove("hidden");
+    }else{
+      useBtn.classList.add("hidden");
+    }
   };
 }
 
