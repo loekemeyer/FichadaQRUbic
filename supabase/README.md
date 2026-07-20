@@ -226,11 +226,11 @@ biométrico sensible, Ley 25.326).
   clave + correo habilitado y guarda un embedding. `{ok, correo, total_rostros}`.
 - **`recon_facial_resolver(p_clave, p_embedding, p_umbral)`** — preview "¿Sos vos,
   Juan?": match server-side, devuelve el candidato **sin fichar**. `{ok, correo,
-  distancia}` o `{error: no_match|no_habilitado}`.
+  distancia}` o `{error: sin_config|clave_invalida|faltan_datos|dim_invalida|no_match|no_habilitado}`.
 - **`recon_facial_fichar(p_clave, p_embedding, p_liveness_ok, p_umbral)`** — flujo
   completo: clave → **liveness** → match por embedding → habilitado → **1/día** →
-  INSERT en `FichadaQR.fichadas`. `{ok, correo, hora}` o `{error: clave_invalida|
-  liveness|no_match|no_habilitado|ya_ficho}`.
+  INSERT en `FichadaQR.fichadas`. `{ok, correo, hora}` o `{error: sin_config|
+  clave_invalida|faltan_datos|dim_invalida|liveness|no_match|no_habilitado|ya_ficho}`.
 - **`recon_facial_baja(p_correo)`** — derecho al olvido (Ley 25.326): borra TODOS
   los embeddings de un correo al desvincular a la persona. Admin (solo `service_role`,
   sin Edge Function; se corre por SQL). `{ok, correo, borrados}`.
@@ -241,6 +241,8 @@ El helper interno del match vive en el schema: `reconocimiento_facial.match_cerc
 
 - **`recon-facial-fichar`** → `recon_facial_fichar`. Body `{embedding:number[128],
   liveness_ok:boolean, umbral?}` + header `x-clave-dispositivo`.
+- **`recon-facial-resolver`** → `recon_facial_resolver`. Preview "¿Sos vos?" (no
+  ficha). Body `{embedding:number[128], umbral?}` + header `x-clave-dispositivo`.
 - **`recon-facial-enrolar`** → `recon_facial_enrolar`. Body `{correo, embedding, etiqueta?}`
   + header `x-clave-dispositivo`.
 
@@ -254,7 +256,10 @@ El helper interno del match vive en el schema: `reconocimiento_facial.match_cerc
   `liveness_ok`. Sin liveness no ficha. Frena la "foto de un compañero".
 - **Umbral** (`umbral_distancia`, por defecto **0.55**, L2/euclídea de face-api):
   match si distancia < umbral. Falso positivo = fichás a otro (grave) → preferir
-  umbral estricto + confirmación "¿Sos vos?" (`recon_facial_resolver`).
+  umbral estricto + confirmación "¿Sos vos?" (`recon-facial-resolver`). El
+  `umbral` del request **solo puede endurecer**, nunca aflojar: el server lo topea
+  al valor de `config` (`least(...)`), así ni con la clave se puede mandar un
+  umbral gigante para forzar un match.
 - **La galería no se expone:** match server-side; `rostros` con RLS y schema no
   publicado en PostgREST. `service_role` (Edge Functions) es el único que entra.
 
@@ -288,6 +293,7 @@ update reconocimiento_facial.config
 - `migrations/0005_reconfacial_schema.sql` — schema `reconocimiento_facial`, pgvector, `rostros` (+HNSW), `config`, RLS.
 - `migrations/0006_reconfacial_funciones.sql` — RPC `recon_facial_*` + helper de match + grants.
 - `functions/recon-facial-fichar/index.ts` — Edge Function (fichar por cara).
+- `functions/recon-facial-resolver/index.ts` — Edge Function (preview "¿Sos vos?").
 - `functions/recon-facial-enrolar/index.ts` — Edge Function (enrolar rostro).
 
 > Las funciones SQL de QR (`fichadaqr_emitir_token`, `fichadaqr_fichar`, `b64url`)

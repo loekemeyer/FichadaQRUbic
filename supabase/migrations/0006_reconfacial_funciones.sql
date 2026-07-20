@@ -95,7 +95,11 @@ begin
   if coalesce(array_length(p_embedding, 1), 0) <> 128 then
     return json_build_object('error','dim_invalida');
   end if;
-  v_umbral := coalesce(p_umbral, v_umbral, 0.55);
+  -- El cliente solo puede ENDURECER el umbral, nunca aflojarlo: el valor de
+  -- config es el techo. Si no, un kiosco con la clave podría mandar umbral=9999
+  -- y hacer que CUALQUIER cara matchee al vecino más cercano (falso positivo
+  -- grave = fichar a otro). least() lo deja siempre <= config.
+  v_umbral := least(coalesce(p_umbral, v_umbral, 0.55), coalesce(v_umbral, 0.55));
 
   v_vec := p_embedding::extensions.vector;
   select correo, distancia into v_correo, v_dist
@@ -116,8 +120,8 @@ $$;
 -- Fichar en el kiosco por cara. Flujo completo y seguro:
 --   clave dispositivo -> liveness (client-asserted) -> match por embedding
 --   -> habilitado -> 1/día -> INSERT en FichadaQR.fichadas.
--- Devuelve {ok, correo, hora} o {error: clave_invalida|liveness|no_match|
--- no_habilitado|ya_ficho|dim_invalida|faltan_datos}.
+-- Devuelve {ok, correo, hora} o {error: sin_config|clave_invalida|faltan_datos|
+-- dim_invalida|liveness|no_match|no_habilitado|ya_ficho}.
 create or replace function public.recon_facial_fichar(
   p_clave       text,
   p_embedding   real[],
@@ -148,7 +152,11 @@ begin
   if coalesce(array_length(p_embedding, 1), 0) <> 128 then
     return json_build_object('error','dim_invalida');
   end if;
-  v_umbral := coalesce(p_umbral, v_umbral, 0.55);
+  -- El cliente solo puede ENDURECER el umbral, nunca aflojarlo: el valor de
+  -- config es el techo. Si no, un kiosco con la clave podría mandar umbral=9999
+  -- y hacer que CUALQUIER cara matchee al vecino más cercano (falso positivo
+  -- grave = fichar a otro). least() lo deja siempre <= config.
+  v_umbral := least(coalesce(p_umbral, v_umbral, 0.55), coalesce(v_umbral, 0.55));
 
   -- liveness: el chequeo real (parpadeo/giro) es client-side; acá se exige la
   -- afirmación. Con requiere_liveness=true, sin liveness no se ficha.

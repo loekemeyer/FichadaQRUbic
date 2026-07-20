@@ -41,10 +41,10 @@ Deno.serve(async (req: Request) => {
   const embedding = body?.embedding;
   const etiqueta = body?.etiqueta == null ? null : String(body.etiqueta);
 
-  if (!correo) return json({ error: "faltan_datos" }, 400);
+  if (!correo || embedding == null) return json({ error: "faltan_datos" }, 400);
   if (!Array.isArray(embedding) || embedding.length !== 128 ||
       !embedding.every((n) => typeof n === "number" && Number.isFinite(n))) {
-    return json({ error: "embedding_invalido" }, 400);
+    return json({ error: "dim_invalida" }, 400);
   }
 
   const supabase = createClient(
@@ -58,7 +58,10 @@ Deno.serve(async (req: Request) => {
     p_embedding: embedding,
     p_etiqueta: etiqueta,
   });
-  if (error) return json({ error: "error_interno", detalle: error.message }, 500);
+  if (error) {
+    console.error("recon_facial_enrolar rpc error:", error.message);
+    return json({ error: "error_interno" }, 500);
+  }
 
   const status = (data as { error?: string })?.error === "clave_invalida" ? 401 : 200;
   return json(data, status);

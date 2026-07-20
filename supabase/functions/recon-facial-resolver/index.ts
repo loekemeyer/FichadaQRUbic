@@ -1,13 +1,13 @@
 // ============================================================================
-// Edge Function: recon-facial-fichar
+// Edge Function: recon-facial-resolver
 // ----------------------------------------------------------------------------
-// Cáscara HTTP + CORS del kiosco de fichada por CARA. Toda la lógica (clave de
-// dispositivo, liveness, match server-side por embedding, correo habilitado,
-// 1 fichada por día y registro) vive en la función SQL public.recon_facial_fichar,
-// que solo puede ejecutar el service_role.
+// Cáscara HTTP + CORS del preview "¿Sos vos, Juan?". NO ficha: solo resuelve
+// quién es la cara (match server-side) para que el kiosco pida confirmación
+// antes de fichar y así bajar falsos positivos. La lógica vive en
+// public.recon_facial_resolver, que solo puede ejecutar el service_role.
 //
-// El kiosco calcula el embedding (128-D, face-api.js) EN EL NAVEGADOR y manda
-// solo el vector: nunca sube la foto, y la galería de rostros no sale del server.
+// La galería de vectores nunca sale del server: el kiosco manda su embedding y
+// recibe solo {correo, distancia}.
 //
 // Deploy con verify_jwt = false: la autorización es la clave de dispositivo.
 // ============================================================================
@@ -29,14 +29,13 @@ Deno.serve(async (req: Request) => {
     });
   if (req.method !== "POST") return json({ error: "metodo" }, 405);
 
-  let body: { embedding?: unknown; liveness_ok?: unknown; umbral?: unknown; clave?: unknown };
+  let body: { embedding?: unknown; umbral?: unknown; clave?: unknown };
   try {
     body = await req.json();
   } catch {
     return json({ error: "body_invalido" }, 400);
   }
 
-  // Clave de dispositivo por header (preferido) o en el body.
   const clave = req.headers.get("x-clave-dispositivo") ?? String(body?.clave ?? "");
 
   const embedding = body?.embedding;
@@ -45,9 +44,6 @@ Deno.serve(async (req: Request) => {
       !embedding.every((n) => typeof n === "number" && Number.isFinite(n))) {
     return json({ error: "dim_invalida" }, 400);
   }
-  const livenessOk = body?.liveness_ok === true;
-  // Solo se reenvía un umbral positivo y finito; además el server lo topea al
-  // valor de config (el cliente puede endurecer, nunca aflojar el match).
   const umbral =
     typeof body?.umbral === "number" && Number.isFinite(body.umbral) && body.umbral > 0
       ? body.umbral
@@ -58,14 +54,13 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const { data, error } = await supabase.rpc("recon_facial_fichar", {
+  const { data, error } = await supabase.rpc("recon_facial_resolver", {
     p_clave: clave,
     p_embedding: embedding,
-    p_liveness_ok: livenessOk,
     p_umbral: umbral,
   });
   if (error) {
-    console.error("recon_facial_fichar rpc error:", error.message);
+    console.error("recon_facial_resolver rpc error:", error.message);
     return json({ error: "error_interno" }, 500);
   }
 
