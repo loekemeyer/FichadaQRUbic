@@ -115,15 +115,14 @@ const USING_BACKEND = true;
 const SUPABASE_URL  = "https://hrxfctzncixxqmpfhskv.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyeGZjdHpuY2l4eHFtcGZoc2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjQyNjEsImV4cCI6MjA4ODMwMDI2MX0.4L6wguch8UZGhC2VpzrWcCjJGUV-IkYsl9JoCWrOLUs";
 
-// Datos de ejemplo mientras no hay backend (reemplazar por lista real de Supabase)
-const EMAILS = [
-  "martina.gomez@fabrica.com","lucas.perez@fabrica.com","sofia.ramirez@fabrica.com",
-  "diego.fernandez@fabrica.com","valen.torres@fabrica.com","agus.medina@fabrica.com",
-  "cami.rojas@fabrica.com","nico.alvarez@fabrica.com"
-];
+// La lista de habilitados vive en planify.employees y la valida el servidor.
+// Acá no hace falta ninguna lista: escribís tu correo y queda guardado en este
+// celular para la próxima (localStorage). Sin sugerencias por privacidad.
+const EMAILS = [];
+const LS_KEY = "fichadaqr_email";
 
 const token = new URLSearchParams(location.search).get("t"); // token del QR
-let currentEmail = EMAILS[0];
+let currentEmail = localStorage.getItem(LS_KEY) || "";
 
 const $ = id => document.getElementById(id);
 function show(state){["s-loading","s-confirm","s-list","s-result"].forEach(s=>
@@ -132,15 +131,16 @@ function pad(n){return String(n).padStart(2,"0");}
 
 function setEmail(e){
   currentEmail=e;
-  $("email").textContent=e;
-  $("initial").textContent=e[0].toUpperCase();
+  $("email").textContent=e||"—";
+  $("initial").textContent=(e[0]||"?").toUpperCase();
 }
 
 function toConfirm(){ setEmail(currentEmail); show("s-confirm"); }
 
 function buildList(){
   const box=$("picks");
-  box.innerHTML='<input id="search" placeholder="Escribí o buscá tu correo…" autocomplete="off" inputmode="email">'
+  box.innerHTML='<input id="search" type="email" inputmode="email" autocomplete="email" '
+    +'autocapitalize="off" spellcheck="false" placeholder="Escribí tu correo…">'
     +'<button id="use-typed" class="pick hidden" style="border-color:var(--accent)"></button>';
   EMAILS.forEach(e=>{
     const b=document.createElement("button");
@@ -149,23 +149,23 @@ function buildList(){
     b.onclick=()=>{setEmail(e);show("s-confirm");};
     box.appendChild(b);
   });
-  const useBtn=$("use-typed");
+  const useBtn=$("use-typed"), search=$("search");
   useBtn.onclick=()=>{ setEmail(useBtn.dataset.email); show("s-confirm"); };
-  $("search").oninput=()=>{
-    const q=$("search").value.trim().toLowerCase();
+  const refresh=()=>{
+    const q=search.value.trim().toLowerCase();
     box.querySelectorAll(".pick:not(#use-typed)").forEach(p=>
       p.classList.toggle("hidden",!p.dataset.email.includes(q)));
-    // permitir usar un correo escrito (no está en la lista de ejemplo): el server valida contra planify
-    const esCorreo=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q);
-    const yaEsta=EMAILS.some(e=>e.toLowerCase()===q);
-    if(esCorreo && !yaEsta){
+    // el server valida contra planify.employees; acá solo chequeamos que sea un correo
+    if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(q)){
       useBtn.dataset.email=q;
       useBtn.innerHTML='<span class="dot"></span>Usar «'+q+'»';
       useBtn.classList.remove("hidden");
-    }else{
-      useBtn.classList.add("hidden");
-    }
+    }else{ useBtn.classList.add("hidden"); }
   };
+  search.oninput=refresh;
+  search.onkeydown=ev=>{ if(ev.key==="Enter" && !useBtn.classList.contains("hidden")) useBtn.click(); };
+  if(currentEmail){ search.value=currentEmail; refresh(); }
+  setTimeout(()=>search.focus(), 50);
 }
 
 function result({icon,cls,title,timeBig,text,btn}){
@@ -197,6 +197,8 @@ async function fichar(){
       body:JSON.stringify({token,email:currentEmail})
     });
     const d=await r.json();
+    // ok o ya_ficho => el correo es válido y habilitado: lo recordamos en este celular
+    if(d.ok||d.error==="ya_ficho"){ try{ localStorage.setItem(LS_KEY,currentEmail); }catch(e){} }
     if(d.ok) result({icon:"✓",cls:"ok",title:"¡Fichada registrada!",timeBig:d.hora||hhmm,
       text:`${currentEmail}<br>Que tengas buen día 👋`});
     else if(d.error==="ya_ficho") result({icon:"⏱",cls:"warn",title:"Ya fichaste hoy",
@@ -215,8 +217,12 @@ $("btn-confirm").onclick=fichar;
 $("btn-other").onclick=()=>{buildList();show("s-list");};
 $("btn-back").onclick=()=>show("s-confirm");
 
-// arranque
-setTimeout(()=>{ toConfirm(); }, 400); // pequeño "verificando…" para UX
+// arranque: si ya fichó antes en este celular, viene con el correo puesto;
+// si no, va directo a escribirlo.
+setTimeout(()=>{
+  if(currentEmail){ toConfirm(); }
+  else { buildList(); show("s-list"); }
+}, 400);
 </script>
 </body>
 </html>
