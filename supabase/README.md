@@ -149,19 +149,33 @@ update "FichadaQR".config
 Al conectar la fuente se detectó que `planify.employees` estaba **expuesta en la
 Data API** con una política `emp_select USING (true)` para `public` y una columna
 `password` (PIN de 4 dígitos en **texto plano**): cualquiera con la clave pública
-podía leer los PINs de todos los empleados. Se cerró así:
+podía leer los PINs de todos los empleados.
 
-- Se creó la vista **`planify.employees_publica`** (sin `password` / `telefono` /
-  `fecha_nacimiento`) para lecturas públicas.
-- Se **revocó `SELECT` sobre `planify.employees` al rol `anon`** (la clave pública
-  ya no lee la tabla base). Los usuarios logueados (`authenticated`) no se tocaron.
-- La fichada no se ve afectada: lee `planify.employees` como `service_role` (server-side).
+**Solución final (column-level):** se quitó el `SELECT` a nivel tabla a `anon` y
+`authenticated`, y se re-otorgó `SELECT` **por columna en todas menos `password`**.
+Resultado:
 
-Rollback si hiciera falta: `grant select on planify.employees to anon;`
+- `password` **no** es legible por API (ni `anon` ni `authenticated`) — verificado:
+  `select password` → `42501 permission denied`.
+- El resto de columnas (`id, nombre, email, activo, …`) sigue legible → el QR/lista
+  y la app admin funcionan.
+- **Login** (empleado y maestro) intacto: va por RPC `SECURITY DEFINER`
+  (`planify_employee_login`, `planify_maestro_login`) que leen `password`
+  server-side, no por lectura directa con la clave pública.
+- La fichada no se ve afectada: lee `planify.employees` como `service_role`.
+- Cambio de app necesario y ya aplicado por el equipo de planify:
+  `loadAllEmployees` pasó de `select=*` a columnas explícitas (sin `password`).
 
-Pendiente (fuera del alcance de la fichada): los usuarios `authenticated` todavía
-pueden leer los PIN de todos (misma política `USING (true)`), y los PIN están en
-texto plano — conviene restringir por usuario/rol y hashearlos.
+> Nota: `information_schema.role_column_grants` puede seguir listando `password`
+> (ruido por múltiples grantors); el privilegio **efectivo** es el que vale y da
+> denegado (`has_column_privilege(...,'password') = false`).
+
+Rollback si hiciera falta (revierte a acceso completo por tabla):
+`grant select on planify.employees to anon, authenticated;`
+
+Pendiente fase 2 (opcional): los PIN siguen en **texto plano** en la tabla (aunque
+ya no se leen por API). Hashearlos requiere tocar `planify_*_login` para comparar
+hash.
 
 Cargar/editar la lista de respaldo propia (opcional):
 
