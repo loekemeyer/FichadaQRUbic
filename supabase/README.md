@@ -191,12 +191,105 @@ on conflict (correo) do nothing;
 > **elegirse** conviene que ese selector también salga de `planify.empleados`
 > (falta un endpoint de solo-lectura para listarlos).
 
+## Reconocimiento facial (backend)
+
+Backend del **kiosco de fichada por cara** (ver `FACIAL-PLAN.md`). Es un agregado
+**aislado**: reusa TODO lo de FichadaQR (la tabla `fichadas` con 1/día atómico y
+el resolutor `esta_habilitado`), y lo único nuevo —los **vectores de las caras**—
+vive en su **propio schema `reconocimiento_facial`**, para no mezclarlo con el
+sistema QR ni con producción (`public`).
+
+**Convención de naming (pedido del proyecto):** lo que puede ir en un schema va en
+`reconocimiento_facial`; lo que no (RPCs que PostgREST tiene que ver en `public`,
+y las Edge Functions) lleva el prefijo `recon_facial_` / `recon-facial-`.
+
+### Cómo funciona (match server-side)
+
+El kiosco calcula el **embedding** (descriptor de 128-D, face-api.js) **en el
+navegador** y manda solo el vector. El match contra los rostros enrolados se hace
+**server-side con pgvector**, así la galería de vectores **nunca sale del server**
+(privacidad + no se puede robar). Se guarda **solo el vector, nunca la foto** (dato
+biométrico sensible, Ley 25.326).
+
+### Tablas (schema `reconocimiento_facial`)
+
+| Tabla | Para qué |
+|-------|----------|
+| `rostros` (`correo`, `embedding vector(128)`, `etiqueta`, `creado_en`) | N embeddings por empleado (varias fotos = match más robusto). Índice **HNSW** (L2). |
+| `config` (`clave_dispositivo`, `umbral_distancia`, `requiere_liveness`, `metrica`) | Clave del kiosco + tunables del match |
+
+`pgvector` se instala en el schema `extensions` (misma convención que `pgcrypto`).
+
+### Lógica (RPC en `public`, `SECURITY DEFINER`, solo `service_role`)
+
+- **`recon_facial_enrolar(p_clave, p_correo, p_embedding, p_etiqueta)`** — valida
+  clave + correo habilitado y guarda un embedding. `{ok, correo, total_rostros}`.
+- **`recon_facial_resolver(p_clave, p_embedding, p_umbral)`** — preview "¿Sos vos,
+  Juan?": match server-side, devuelve el candidato **sin fichar**. `{ok, correo,
+  distancia}` o `{error: no_match|no_habilitado}`.
+- **`recon_facial_fichar(p_clave, p_embedding, p_liveness_ok, p_umbral)`** — flujo
+  completo: clave → **liveness** → match por embedding → habilitado → **1/día** →
+  INSERT en `FichadaQR.fichadas`. `{ok, correo, hora}` o `{error: clave_invalida|
+  liveness|no_match|no_habilitado|ya_ficho}`.
+- **`recon_facial_baja(p_correo)`** — derecho al olvido (Ley 25.326): borra TODOS
+  los embeddings de un correo al desvincular a la persona. Admin (solo `service_role`,
+  sin Edge Function; se corre por SQL). `{ok, correo, borrados}`.
+
+El helper interno del match vive en el schema: `reconocimiento_facial.match_cercano`.
+
+### Edge Functions (cáscara HTTP + CORS, `verify_jwt = false`)
+
+- **`recon-facial-fichar`** → `recon_facial_fichar`. Body `{embedding:number[128],
+  liveness_ok:boolean, umbral?}` + header `x-clave-dispositivo`.
+- **`recon-facial-enrolar`** → `recon_facial_enrolar`. Body `{correo, embedding, etiqueta?}`
+  + header `x-clave-dispositivo`.
+
+### Modelo de seguridad
+
+- **Clave de dispositivo** (`reconocimiento_facial.config.clave_dispositivo`, al
+  azar): solo el equipo que la conoce puede **fichar/enrolar** — ata la operación
+  al kiosco físico (igual idea que la clave del QR, pero propia del kiosco facial).
+- **Liveness** (`requiere_liveness`, por defecto **`true`**): el chequeo real
+  (parpadeo/giro con landmarks) es client-side; el server exige la afirmación
+  `liveness_ok`. Sin liveness no ficha. Frena la "foto de un compañero".
+- **Umbral** (`umbral_distancia`, por defecto **0.55**, L2/euclídea de face-api):
+  match si distancia < umbral. Falso positivo = fichás a otro (grave) → preferir
+  umbral estricto + confirmación "¿Sos vos?" (`recon_facial_resolver`).
+- **La galería no se expone:** match server-side; `rostros` con RLS y schema no
+  publicado en PostgREST. `service_role` (Edge Functions) es el único que entra.
+
+Ver / rotar la clave del kiosco facial (nunca subir al repo):
+
+```sql
+-- ver
+select clave_dispositivo from reconocimiento_facial.config where id = 1;
+-- rotar (invalida la anterior)
+update reconocimiento_facial.config
+   set clave_dispositivo = substr(replace(gen_random_uuid()::text,'-',''),1,20),
+       actualizado_en = now()
+ where id = 1;
+
+-- ajustar umbral / liveness sin redeployar
+update reconocimiento_facial.config
+   set umbral_distancia = 0.55, requiere_liveness = true, actualizado_en = now()
+ where id = 1;
+```
+
+> **Aplicar:** el schema y las funciones están en `migrations/0005_*` y
+> `migrations/0006_*` (aún **sin aplicar** al proyecto — se aplican con
+> `supabase db push` o desde el panel/MCP). Las Edge Functions se despliegan con
+> `verify_jwt = false`.
+
 ## Archivos
 
 - `migrations/0001_fichadaqr_schema.sql` — schema, tablas, RLS, semilla de config.
 - `functions/fichada-qr-emitir-token/index.ts` — Edge Function (emitir).
 - `functions/fichada-qr-fichar/index.ts` — Edge Function (fichar).
+- `migrations/0005_reconfacial_schema.sql` — schema `reconocimiento_facial`, pgvector, `rostros` (+HNSW), `config`, RLS.
+- `migrations/0006_reconfacial_funciones.sql` — RPC `recon_facial_*` + helper de match + grants.
+- `functions/recon-facial-fichar/index.ts` — Edge Function (fichar por cara).
+- `functions/recon-facial-enrolar/index.ts` — Edge Function (enrolar rostro).
 
-> Las funciones SQL (`fichadaqr_emitir_token`, `fichadaqr_fichar`, `b64url`) se
-> aplicaron como migración en Supabase (`fichadaqr_funciones`,
+> Las funciones SQL de QR (`fichadaqr_emitir_token`, `fichadaqr_fichar`, `b64url`)
+> se aplicaron como migración en Supabase (`fichadaqr_funciones`,
 > `fichadaqr_revoke_anon_rpc`).
