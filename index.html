@@ -26,6 +26,9 @@
   h1{font-size:26px;margin:0 0 6px;letter-spacing:-.4px;}
   .sub{margin:0 0 26px;color:var(--muted);font-size:14px;}
   .links{display:flex;flex-direction:column;gap:12px;text-align:left;}
+  .grp{font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--muted);
+    text-align:left;margin:20px 4px 8px;}
+  .grp:first-child{margin-top:0}
   a.tile{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--border);
     border-radius:16px;box-shadow:var(--shadow);padding:18px;text-decoration:none;color:inherit;transition:.15s;}
   a.tile:hover{border-color:var(--accent);transform:translateY(-1px);}
@@ -40,20 +43,32 @@
   <div class="wrap">
     <div class="mark"></div>
     <h1>Fichada QR</h1>
-    <p class="sub">Control de presencia por código QR rotativo, sin pedir ubicación.</p>
+    <p class="sub">Control de presencia sin pedir ubicación. Elegí el método: <b>QR rotativo</b> o <b>reconocimiento facial</b>.</p>
 
     <div class="links">
+      <div class="grp">Por QR</div>
       <a class="tile" href="pantalla.html">
         <div class="ic">📺</div>
         <div><b>Pantalla del trabajo</b><span>Abrir en el dispositivo fijo. Muestra el QR que rota.</span></div>
       </a>
       <a class="tile" href="fichar.html">
         <div class="ic">📲</div>
-        <div><b>Fichar (demo)</b><span>La pantalla que se abre al escanear el QR.</span></div>
+        <div><b>Fichar</b><span>La pantalla que se abre al escanear el QR.</span></div>
+      </a>
+
+      <div class="grp">Por reconocimiento facial</div>
+      <a class="tile" href="kiosco.html">
+        <div class="ic">😊</div>
+        <div><b>Kiosco facial</b><span>Dispositivo fijo con cámara: fichás mirando y parpadeando.</span></div>
+      </a>
+      <a class="tile" href="enrolar.html">
+        <div class="ic">➕</div>
+        <div><b>Enrolar rostro (admin)</b><span>Registrar la cara de un empleado (3–5 capturas).</span></div>
       </a>
     </div>
 
-    <footer>Prototipo · sin backend conectado todavía.<br>Diseño y arquitectura en <b>DISENO.md</b>.</footer>
+    <footer>El kiosco y el enrolamiento se abren con la clave del dispositivo en la URL
+      (<b>#clave=…</b>).<br>Diseño y arquitectura en <b>DISENO.md</b> · plan facial en <b>FACIAL-PLAN.md</b>.</footer>
   </div>
 </body>
 </html>

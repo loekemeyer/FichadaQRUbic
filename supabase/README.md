@@ -246,6 +246,20 @@ El helper interno del match vive en el schema: `reconocimiento_facial.match_cerc
 - **`recon-facial-enrolar`** → `recon_facial_enrolar`. Body `{correo, embedding, etiqueta?}`
   + header `x-clave-dispositivo`.
 
+### Frontend (páginas)
+
+En la raíz del repo, **separado del QR** (se elige uno u otro desde `index.html`):
+
+- **`kiosco.html`** — dispositivo fijo con cámara. Usa **face-api.js** en el navegador:
+  detecta la cara → **liveness por parpadeo** (EAR) → calcula el embedding 128-D →
+  `recon-facial-resolver` ("¿Sos vos?") → `recon-facial-fichar`. La foto nunca sale
+  del dispositivo. Abrir con `kiosco.html#clave=…`.
+- **`enrolar.html`** — pantalla de admin: correo del empleado + 3–5 capturas →
+  `recon-facial-enrolar`. Abrir con `enrolar.html#clave=…`.
+
+> Los modelos de face-api se cargan del CDN (`@vladmandic/face-api`). Para uso
+> offline, self-hostear los ~6 MB de pesos en el repo (pendiente, ver FACIAL-PLAN.md).
+
 ### Modelo de seguridad
 
 - **Clave de dispositivo** (`reconocimiento_facial.config.clave_dispositivo`, al

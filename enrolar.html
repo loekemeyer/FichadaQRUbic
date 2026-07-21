@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enrolar rostro · Admin</title>
+<style>
+  :root{
+    --bg:#eef1f2; --surface:#fff; --surface-2:#f5f8f8; --border:#d7dee0;
+    --ink:#16211f; --muted:#5c6b6a; --accent:#0d7d84; --accent-ink:#0a5f65;
+    --ok:#15803d; --ok-bg:#e7f4ec; --warn:#b45309; --warn-bg:#fbf0e2;
+    --bad:#b91c1c; --bad-bg:#fbe9e9;
+    --shadow:0 1px 2px rgba(16,33,31,.06),0 10px 30px rgba(16,33,31,.08);
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0c1315; --surface:#141e21; --surface-2:#182529; --border:#26343a;
+    --ink:#e8f0ef; --muted:#94a5a4; --accent:#2bb7bf; --accent-ink:#7fdce0;
+    --ok:#34d399; --ok-bg:#12241c; --warn:#f0a44a; --warn-bg:#241a10;
+    --bad:#f87171; --bad-bg:#251316;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.4);}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;min-height:100vh;display:grid;place-items:start center;padding:24px 16px 40px;}
+  .wrap{max-width:440px;width:100%;}
+  header{display:flex;align-items:center;gap:10px;margin-bottom:16px;}
+  .mark{width:32px;height:32px;border-radius:9px;background:var(--accent);display:grid;place-items:center;
+    color:#fff;font-size:16px;flex:0 0 auto;}
+  header b{font-size:15px;letter-spacing:-.2px;}
+  header span{display:block;font-size:11px;color:var(--muted);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);padding:22px;}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--muted);}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:14px 0 6px;font-weight:600;}
+  input[type=email]{width:100%;padding:12px;border-radius:11px;border:1px solid var(--border);
+    background:var(--surface-2);color:var(--ink);font-family:var(--sans);font-size:15px;}
+  .stage{position:relative;width:100%;aspect-ratio:1/1;margin:14px auto 6px;max-width:320px;}
+  .stage video{width:100%;height:100%;object-fit:cover;border-radius:16px;background:#000;
+    transform:scaleX(-1);border:1px solid var(--border);}
+  .dots{display:flex;justify-content:center;gap:8px;margin:12px 0 2px;}
+  .dot{width:12px;height:12px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);}
+  .dot.on{background:var(--accent);border-color:var(--accent);}
+  .status{min-height:20px;text-align:center;font-size:13.5px;font-weight:600;margin:8px 0 0;color:var(--accent-ink);}
+  .btn{display:block;width:100%;border:none;border-radius:12px;font-family:var(--sans);font-size:15px;
+    font-weight:650;padding:14px;cursor:pointer;transition:.15s;margin-top:12px;}
+  .btn-primary{background:var(--accent);color:#fff;box-shadow:var(--shadow);}
+  .btn-primary:active{transform:translateY(1px)} .btn-primary:disabled{opacity:.55;cursor:default}
+  .btn-ghost{background:var(--surface-2);color:var(--muted);font-weight:600;border:1px solid var(--border);}
+  .badge{width:74px;height:74px;border-radius:50%;display:grid;place-items:center;margin:6px auto 12px;font-size:38px;}
+  .badge.ok{background:var(--ok-bg);color:var(--ok)} .badge.bad{background:var(--bad-bg);color:var(--bad)}
+  .center{text-align:center}
+  .hidden{display:none!important}
+  footer{text-align:center;margin-top:16px;font-size:11px;color:var(--muted);line-height:1.5}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">☺</div>
+    <div><b>Enrolar rostro</b><span>Administración · reconocimiento facial</span></div>
+  </header>
+
+  <div class="card">
+    <!-- cargando -->
+    <div id="s-loading" class="center">
+      <p class="eyebrow">Preparando</p>
+      <p class="status" id="loading-msg">Cargando el reconocimiento facial…</p>
+    </div>
+
+    <!-- formulario de enrolamiento -->
+    <div id="s-form" class="hidden">
+      <span class="eyebrow">Nuevo rostro</span>
+      <label for="email">Correo del empleado (debe estar habilitado)</label>
+      <input id="email" type="email" inputmode="email" autocomplete="off"
+             autocapitalize="off" spellcheck="false" placeholder="nombre.apellido@empresa.com">
+
+      <div class="stage"><video id="video" playsinline muted></video></div>
+      <div class="dots" id="dots"></div>
+      <p class="status" id="status">Tomá 3–5 capturas de distintos ángulos.</p>
+
+      <button class="btn btn-primary" id="btn-cap">Capturar rostro</button>
+      <button class="btn btn-ghost" id="btn-reset">Terminar / enrolar otro</button>
+    </div>
+
+    <!-- error fatal -->
+    <div id="s-error" class="center hidden">
+      <div class="badge bad">✕</div>
+      <h3 id="e-title">Error</h3>
+      <p class="status" id="e-msg" style="color:var(--muted);font-weight:400"></p>
+    </div>
+  </div>
+
+  <footer>Se guarda <b>solo el vector</b> de la cara, nunca la foto.<br>
+    Dato biométrico sensible (Ley 25.326): enrolar con consentimiento.</footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/dist/face-api.js"></script>
+<script>
+/* ============================================================================
+   ENROLAR ROSTRO (admin) — backend Supabase, schema reconocimiento_facial.
+   Calcula el embedding EN EL NAVEGADOR y lo manda a recon-facial-enrolar (que
+   valida clave de dispositivo + correo habilitado). Se guarda solo el vector.
+
+   Abrí con la clave del dispositivo:  enrolar.html#clave=TU_CLAVE
+   ==========================================================================*/
+const SUPABASE_URL  = "https://hrxfctzncixxqmpfhskv.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyeGZjdHpuY2l4eHFtcGZoc2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjQyNjEsImV4cCI6MjA4ODMwMDI2MX0.4L6wguch8UZGhC2VpzrWcCjJGUV-IkYsl9JoCWrOLUs";
+const MODEL_URL     = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/model";
+const CLAVE = new URLSearchParams((location.hash||"").replace(/^#/,"")).get("clave") || "";
+
+const DET_OPTS = { inputSize: 320, scoreThreshold: 0.5 };
+const MIN_FACE = 0.22;      // ancho de cara / ancho de video
+const TARGET   = 4;         // capturas recomendadas
+
+const $ = id => document.getElementById(id);
+const emailOk = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+function show(state){ ["s-loading","s-form","s-error"].forEach(s=>$(s).classList.toggle("hidden", s!==state)); }
+function fatal(title,msg){ $("e-title").textContent=title; $("e-msg").innerHTML=msg; show("s-error"); }
+
+let video, stream, captured=0, busy=false;
+
+function paintDots(){
+  const box=$("dots"); box.innerHTML="";
+  const n=Math.max(TARGET,captured);
+  for(let i=0;i<n;i++){ const d=document.createElement("div");
+    d.className="dot"+(i<captured?" on":""); box.appendChild(d); }
+}
+
+async function callFn(name, body){
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/${name}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON,
+             "Authorization":"Bearer "+SUPABASE_ANON,"x-clave-dispositivo":CLAVE},
+    body:JSON.stringify(body)
+  });
+  return r.json();
+}
+
+async function init(){
+  if(!CLAVE){
+    fatal("Falta la clave del dispositivo",
+      "Abrí esta página con la clave en la URL:<br><b>enrolar.html#clave=TU_CLAVE</b>"); return;
+  }
+  try{
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+  }catch(e){ fatal("No se pudieron cargar los modelos","Revisá la conexión y recargá."); return; }
+  try{
+    $("loading-msg").textContent = "Encendiendo la cámara…";
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user" }, audio:false });
+    video = $("video"); video.srcObject = stream; await video.play();
+  }catch(e){ fatal("Sin acceso a la cámara","Permití la cámara y recargá."); return; }
+  paintDots(); show("s-form");
+}
+
+async function capturar(){
+  if(busy) return;
+  const email = $("email").value.trim().toLowerCase();
+  if(!emailOk(email)){ $("status").textContent="Escribí un correo válido primero."; $("email").focus(); return; }
+
+  busy=true; $("btn-cap").disabled=true; $("status").textContent="Detectando la cara…";
+  let dets=[];
+  try{
+    dets = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions(DET_OPTS))
+      .withFaceLandmarks().withFaceDescriptors();
+  }catch(e){ /* frame suelto */ }
+
+  if(dets.length === 0){ done("No se detectó una cara. Mirá a la cámara con buena luz."); return; }
+  if(dets.length > 1){ done("Hay más de una cara en cuadro. Que quede solo el empleado."); return; }
+  const det = dets[0];
+  if(det.detection.box.width < video.videoWidth*MIN_FACE){ done("Acercate un poco más a la cámara."); return; }
+
+  const embedding = Array.from(det.descriptor).map(Number); // number[128]
+  let d;
+  try{ d = await callFn("recon-facial-enrolar",
+        { correo: email, embedding, etiqueta: "captura "+(captured+1) }); }
+  catch(e){ done("Sin conexión. Intentá de nuevo."); return; }
+
+  if(d.ok){
+    captured = d.total_rostros ?? (captured+1); paintDots();
+    done(captured>=TARGET
+      ? `✓ ${captured} capturas. Suficiente — probá el kiosco.`
+      : `✓ Captura guardada (${captured}). Cambiá un poco el ángulo y seguí.`);
+  }else if(d.error === "no_habilitado"){
+    done(`✕ ${email} no está habilitado (planify.employees). No se puede enrolar.`);
+  }else if(d.error === "clave_invalida"){
+    fatal("Clave de dispositivo inválida","Revisá el <b>#clave=</b> de la URL.");
+  }else if(d.error === "dim_invalida"){
+    done("La cara no se procesó bien. Probá otra captura.");
+  }else{
+    done("No se pudo guardar. Probá de nuevo.");
+  }
+}
+
+function done(msg){ $("status").textContent=msg; busy=false; $("btn-cap").disabled=false; }
+
+$("btn-cap").onclick = capturar;
+$("btn-reset").onclick = ()=>{
+  captured=0; paintDots(); $("email").value=""; $("status").textContent="Listo para otro empleado.";
+  $("email").focus();
+};
+
+init();
+</script>
+</body>
+</html>
