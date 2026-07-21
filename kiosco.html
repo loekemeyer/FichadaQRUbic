@@ -102,13 +102,14 @@
       <div class="badge bad">✕</div>
       <h1 id="e-title">No se pudo iniciar</h1>
       <p class="sub" id="e-msg"></p>
+      <div class="btnrow" id="e-actions"></div>
     </div>
 
     <p class="foot">La cámara procesa todo <b>en este dispositivo</b>: nunca se sube tu foto,
       solo se compara un vector. Una fichada por día.</p>
   </div>
 
-<div style="position:fixed;bottom:6px;right:9px;font:700 12px ui-monospace,Menlo,monospace;color:#12b0b8;background:rgba(0,0,0,.06);padding:3px 8px;border-radius:8px;z-index:99">kiosco v4</div>
+<div style="position:fixed;bottom:6px;right:9px;font:700 12px ui-monospace,Menlo,monospace;color:#12b0b8;background:rgba(0,0,0,.06);padding:3px 8px;border-radius:8px;z-index:99">kiosco v5</div>
 
 <!-- face-api.js (fork mantenido, trae TensorFlow.js embebido). Corre 100% en el navegador. -->
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/dist/face-api.js"></script>
@@ -144,7 +145,7 @@ function show(state){
   ["s-loading","s-scan","s-confirm","s-result","s-error"].forEach(s=>
     $(s).classList.toggle("hidden", s!==state));
 }
-function fatal(title,msg){ $("e-title").textContent=title; $("e-msg").innerHTML=msg; show("s-error"); }
+function fatal(title,msg){ $("e-title").textContent=title; $("e-msg").innerHTML=msg; $("e-actions").innerHTML=""; show("s-error"); }
 
 let video, stream, running=false, descriptor=null, resetTimer=null;
 let earClosed=false, blinks=0, earRef=0, nearSince=0, livenessOk=false;
@@ -186,15 +187,31 @@ async function init(){
       "Revisá la conexión a internet e recargá la página."); return;
   }
   // 2) cámara
+  $("loading-msg").textContent = "Encendiendo la cámara…";
+  if(!(await openCamera())){ cameraError(); return; }
+  resetToScan();
+}
+
+async function openCamera(){
   try{
-    $("loading-msg").textContent = "Encendiendo la cámara…";
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); }
     stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user" }, audio:false });
     video = $("video"); video.srcObject = stream; await video.play();
-  }catch(e){
-    fatal("Sin acceso a la cámara",
-      "Permití el uso de la cámara en este dispositivo y recargá la página."); return;
-  }
-  resetToScan();
+    return true;
+  }catch(e){ return false; }
+}
+
+// La cámara suele fallar cuando OTRA pestaña/app la tiene abierta (ej. Enrolar).
+function cameraError(){
+  $("e-title").textContent = "Sin acceso a la cámara";
+  $("e-msg").innerHTML = "Cerrá otras <b>pestañas o apps</b> que estén usando la cámara "
+    + "(por ejemplo la de <b>Enrolar</b>) y tocá Reintentar.";
+  $("e-actions").innerHTML = '<button class="btn btn-primary" id="e-retry">Reintentar</button>';
+  show("s-error");
+  $("e-retry").onclick = async ()=>{
+    $("e-title").textContent = "Probando…"; $("e-actions").innerHTML = "";
+    if(await openCamera()) resetToScan(); else cameraError();
+  };
 }
 
 function resetToScan(){
