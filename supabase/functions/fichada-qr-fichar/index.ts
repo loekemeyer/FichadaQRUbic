@@ -46,7 +46,10 @@ Deno.serve(async (req: Request) => {
     p_token: token,
     p_email: email,
   });
-  if (error) return json({ error: "error_interno", detalle: error.message }, 500);
+  if (error) {
+    console.error("fichadaqr_fichar rpc error:", error.message);
+    return json({ error: "error_interno" }, 500);
+  }
 
   return json(data);
 });

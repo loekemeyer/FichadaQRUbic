@@ -40,7 +40,10 @@ Deno.serve(async (req: Request) => {
   );
 
   const { data, error } = await supabase.rpc("fichadaqr_emitir_token", { p_clave: clave });
-  if (error) return json({ error: "error_interno", detalle: error.message }, 500);
+  if (error) {
+    console.error("fichadaqr_emitir_token rpc error:", error.message);
+    return json({ error: "error_interno" }, 500);
+  }
 
   const status = (data as { error?: string })?.error === "clave_invalida" ? 401 : 200;
   return json(data, status);
