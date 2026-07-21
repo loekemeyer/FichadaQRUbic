@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>QR fijo · Fichada</title>
+<style>
+  :root{ --bg:#0b1220; --ink:#e8f0ef; --muted:#94a5a4; --accent:#2bb7bf; }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;}
+  h1{font-size:26px;margin:0 0 6px;}
+  p{color:var(--muted);font-size:15px;margin:0 0 20px;max-width:520px;line-height:1.45;}
+  #qr{background:#fff;padding:18px;border-radius:16px;display:inline-block;box-shadow:0 12px 40px rgba(0,0,0,.5);}
+  #qr img,#qr canvas{display:block;width:min(70vw,340px);height:auto;}
+  .url{margin-top:14px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--accent);word-break:break-all;max-width:520px;}
+  .note{margin-top:18px;font-size:13px;color:var(--muted);max-width:520px;line-height:1.5;}
+  @media print{ body{background:#fff;color:#000;} #qr{box-shadow:none;} .note{display:none;} }
+</style>
+</head>
+<body>
+  <h1>Escaneá para fichar</h1>
+  <p>Este QR es <b>fijo</b>: se imprime y se pega en la pared. La fichada solo se
+     acepta desde el <b>WiFi del trabajo</b> (no con datos móviles).</p>
+  <div id="qr"></div>
+  <div class="url" id="url"></div>
+  <div class="note">Para imprimirlo: <b>Ctrl/Cmd + P</b>. El QR no cambia — no necesita
+     estar conectado a nada ni regenerarse.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+  // El QR estático apunta a fichar.html con el marcador ?e=1 (sin token).
+  // La app (lector in-app) o el navegador del celular lo reconocen como fichada
+  // estática; la Edge Function valida por la IP del WiFi del trabajo.
+  var BASE = location.origin + location.pathname.replace(/pantalla-estatica\.html$/, "") + "fichar.html?e=1";
+  document.getElementById("url").textContent = BASE;
+  new QRCode(document.getElementById("qr"), { text: BASE, width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M });
+</script>
+</body>
+</html>

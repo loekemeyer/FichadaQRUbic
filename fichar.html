@@ -205,6 +205,10 @@ async function fichar(){
       text:`Tu fichada de hoy quedó a las <b>${d.hora}</b>. Solo una vez por día.`,btn:"Entendido"});
     else if(d.error==="token_vencido"||d.error==="token_usado"||d.error==="token_invalido") result({icon:"↻",cls:"bad",
       title:"El código venció",text:"Volvé a la pantalla del trabajo y escaneá el código actual.",btn:"Reintentar"});
+    else if(d.error==="ip_no_permitida") result({icon:"📶",cls:"bad",title:"Fuera del WiFi del trabajo",
+      text:"Para fichar tenés que estar conectado al <b>WiFi del trabajo</b> (no datos móviles).",btn:"Reintentar"});
+    else if(d.error==="ip_no_configurada") result({icon:"⚙",cls:"bad",title:"Falta configurar",
+      text:"Todavía no se cargó la IP del trabajo. Avisá a administración.",btn:"Entendido"});
     else if(d.error==="no_habilitado") result({icon:"✕",cls:"bad",title:"Correo no habilitado",
       text:`<b>${currentEmail}</b> no está en la lista. Avisá a administración.`,btn:"Volver"});
     else result({icon:"✕",cls:"bad",title:"No se pudo fichar",text:"Probá de nuevo en un momento.",btn:"Reintentar"});
