@@ -128,9 +128,10 @@ const CLAVE = new URLSearchParams((location.hash||"").replace(/^#/,"")).get("cla
 // Umbrales de detección/liveness (ajustables). El umbral de MATCH lo pone el
 // server (reconocimiento_facial.config.umbral_distancia); acá no se toca.
 const DET_OPTS   = { inputSize: 320, scoreThreshold: 0.5 };
-const MIN_FACE   = 0.20;   // ancho de cara / ancho de video: pedir que se acerque
-const EAR_CLOSED = 0.20;   // ojo cerrado (parpadeo)
-const EAR_OPEN   = 0.25;   // ojo abierto de nuevo -> cuenta un parpadeo
+const MIN_FACE   = 0.16;   // ancho de cara / ancho de video: pedir que se acerque
+const BLINK_DROP = 0.72;   // parpadeo (adaptativo): EAR cae por debajo del 72% del "ojo abierto"
+const BLINK_BACK = 0.85;   // y vuelve por encima del 85% -> cuenta un parpadeo
+const HOLD_MS    = 2000;   // respaldo: si mantenés la cara quieta N ms, captura sin parpadeo
 const LOOP_MS    = 70;
 const RESET_MS   = 6000;   // volver a escanear tras un resultado
 
@@ -144,7 +145,7 @@ function show(state){
 function fatal(title,msg){ $("e-title").textContent=title; $("e-msg").innerHTML=msg; show("s-error"); }
 
 let video, stream, running=false, descriptor=null, resetTimer=null;
-let earClosed=false, blinks=0;
+let earClosed=false, blinks=0, earRef=0, nearSince=0, livenessOk=false;
 
 // ---- Liveness: Eye Aspect Ratio (parpadeo) desde los landmarks ----
 function ear(eye){
@@ -196,7 +197,7 @@ async function init(){
 
 function resetToScan(){
   if(resetTimer){ clearTimeout(resetTimer); resetTimer=null; }
-  descriptor=null; earClosed=false; blinks=0; running=true;
+  descriptor=null; earClosed=false; blinks=0; earRef=0; nearSince=0; livenessOk=false; running=true;
   $("ring").style.strokeDasharray = 2*Math.PI*156;
   $("ring").style.strokeDashoffset = 2*Math.PI*156;
   $("status").textContent = "Ubicate frente a la cámara";
@@ -221,25 +222,38 @@ async function scanLoop(){
       const near = box.width > video.videoWidth * MIN_FACE;
       const e = (ear(det.landmarks.getLeftEye()) + ear(det.landmarks.getRightEye())) / 2;
 
-      // detección de parpadeo (cierra y vuelve a abrir)
-      if(e < EAR_CLOSED){ earClosed = true; }
-      else if(e > EAR_OPEN && earClosed){ earClosed = false; blinks++; }
+      // Baseline adaptativo del "ojo abierto" (sube rápido, baja lento) para que
+      // el parpadeo funcione con ojos chicos / distinta cámara / anteojos.
+      earRef = earRef ? Math.max(e, earRef*0.97 + e*0.03) : e;
+      if(earRef > 0.1){
+        if(e < earRef*BLINK_DROP){ earClosed = true; }
+        else if(e > earRef*BLINK_BACK && earClosed){ earClosed = false; blinks++; }
+      }
 
-      $("ring").style.strokeDashoffset = RING * (near ? (blinks>=1 ? 0 : .5) : 1);
+      // Respaldo: si la cara está cerca y quieta un rato, capturar aunque no se
+      // haya detectado un parpadeo (evita quedar trabado).
+      if(near){ if(!nearSince) nearSince = Date.now(); } else { nearSince = 0; }
+      const held = near && nearSince && (Date.now() - nearSince > HOLD_MS);
+      livenessOk = blinks >= 1;
 
-      if(near && blinks >= 1){
+      $("ring").style.strokeDashoffset = RING * (near ? (livenessOk ? 0 : .5) : 1);
+
+      if(near && (livenessOk || held)){
         running = false;
         $("status").textContent = "Capturando…";
         const full = await faceapi
           .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions(DET_OPTS))
           .withFaceLandmarks().withFaceDescriptor();
-        if(!full){ running = true; continue; }        // se perdió la cara: seguir
-        descriptor = Array.from(full.descriptor).map(Number); // number[128]
+        if(!full){ running = true; nearSince = 0; continue; }   // se perdió la cara: seguir
+        descriptor = Array.from(full.descriptor).map(Number);   // number[128]
         await onCaptured();
         return;
       }
-      $("status").textContent = near ? "Parpadeá para fichar 👁️" : "Acercate un poco a la cámara";
+      $("status").textContent = near
+        ? "Parpadeá… (o quedate quieto un momento) 👁️"
+        : "Acercate un poco a la cámara";
     }else{
+      nearSince = 0;
       $("status").textContent = "Ubicate frente a la cámara";
     }
     await sleep(LOOP_MS);
@@ -274,7 +288,7 @@ async function onCaptured(){
 async function fichar(){
   $("btn-si").disabled = true; $("btn-no").disabled = true;
   let d;
-  try{ d = await callFn("recon-facial-fichar", { embedding: descriptor, liveness_ok:true }); }
+  try{ d = await callFn("recon-facial-fichar", { embedding: descriptor, liveness_ok: livenessOk }); }
   catch(e){ d = {error:"__net"}; }
   $("btn-si").disabled = false; $("btn-no").disabled = false;
 
