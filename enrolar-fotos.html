@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Enrolar desde fotos · Admin</title>
+<style>
+  :root{
+    --bg:#eef1f2; --surface:#fff; --surface-2:#f5f8f8; --border:#d7dee0;
+    --ink:#16211f; --muted:#5c6b6a; --accent:#0d7d84; --accent-ink:#0a5f65;
+    --ok:#15803d; --ok-bg:#e7f4ec; --warn:#b45309; --warn-bg:#fbf0e2;
+    --bad:#b91c1c; --bad-bg:#fbe9e9;
+    --shadow:0 1px 2px rgba(16,33,31,.06),0 10px 30px rgba(16,33,31,.08);
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0c1315; --surface:#141e21; --surface-2:#182529; --border:#26343a;
+    --ink:#e8f0ef; --muted:#94a5a4; --accent:#2bb7bf; --accent-ink:#7fdce0;
+    --ok:#34d399; --ok-bg:#12241c; --warn:#f0a44a; --warn-bg:#241a10;
+    --bad:#f87171; --bad-bg:#251316;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.4);}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;min-height:100vh;padding:24px 16px 60px;}
+  .wrap{max-width:560px;margin:0 auto;}
+  header{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .mark{width:32px;height:32px;border-radius:9px;background:var(--accent);display:grid;place-items:center;
+    color:#fff;font-size:16px;flex:0 0 auto;}
+  header b{font-size:15px;letter-spacing:-.2px;}
+  header span{display:block;font-size:11px;color:var(--muted);}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);padding:18px;}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.9px;text-transform:uppercase;color:var(--muted);}
+  .drop{margin-top:12px;border:2px dashed var(--border);border-radius:14px;padding:22px;text-align:center;
+    background:var(--surface-2);cursor:pointer;}
+  .drop:hover{border-color:var(--accent);}
+  .drop b{color:var(--accent-ink);}
+  .drop small{display:block;color:var(--muted);font-size:12px;margin-top:6px;}
+  .rows{margin-top:14px;display:flex;flex-direction:column;gap:8px;}
+  .row{display:flex;align-items:center;gap:10px;padding:8px;border:1px solid var(--border);border-radius:11px;background:var(--surface);}
+  .row img{width:46px;height:46px;object-fit:cover;border-radius:8px;background:#000;flex:0 0 auto;}
+  .row .mid{flex:1;min-width:0;}
+  .row .fn{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .row input{width:100%;max-width:110px;padding:7px 9px;border-radius:8px;border:1px solid var(--border);
+    background:var(--surface-2);color:var(--ink);font-family:var(--mono);font-size:14px;margin-top:2px;}
+  .row .st{font-size:12.5px;font-weight:650;text-align:right;min-width:96px;flex:0 0 auto;}
+  .st.ok{color:var(--ok)} .st.bad{color:var(--bad)} .st.wait{color:var(--muted)} .st.warn{color:var(--warn)}
+  .btn{display:block;width:100%;border:none;border-radius:12px;font-family:var(--sans);font-size:15px;
+    font-weight:650;padding:14px;cursor:pointer;transition:.15s;margin-top:14px;}
+  .btn-primary{background:var(--accent);color:#fff;box-shadow:var(--shadow);}
+  .btn-primary:disabled{opacity:.5;cursor:default}
+  .summary{margin-top:12px;text-align:center;font-size:13.5px;font-weight:600;color:var(--accent-ink);min-height:20px;}
+  .fatal{color:var(--bad);text-align:center;font-weight:600;}
+  .hidden{display:none!important}
+  footer{text-align:center;margin-top:16px;font-size:11px;color:var(--muted);line-height:1.5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="mark">🖼️</div>
+    <div><b>Enrolar desde fotos</b><span>Carga masiva · reconocimiento facial</span></div>
+  </header>
+
+  <div class="card">
+    <div id="s-loading"><p class="eyebrow">Preparando</p><p class="summary" id="loading-msg">Cargando el reconocimiento facial…</p></div>
+
+    <div id="s-main" class="hidden">
+      <span class="eyebrow">Fotos tipo carnet (de frente, 1 cara)</span>
+      <label class="drop" for="files">
+        <b>Elegí las fotos</b> (podés varias a la vez)
+        <small>Si el archivo se llama por legajo (ej. <b>254.jpg</b>) lo detecta solo. Si no, escribí el legajo en cada una.</small>
+      </label>
+      <input id="files" type="file" accept="image/*" multiple class="hidden">
+
+      <div class="rows" id="rows"></div>
+
+      <button class="btn btn-primary" id="btn-go" disabled>Enrolar todas</button>
+      <div class="summary" id="summary"></div>
+    </div>
+
+    <div id="s-error" class="hidden"><p class="fatal" id="e-msg"></p></div>
+  </div>
+
+  <footer>Se guarda <b>solo el vector</b> de cada cara, nunca la foto.<br>
+    Dato biométrico sensible (Ley 25.326): usar con consentimiento.</footer>
+</div>
+
+<div style="position:fixed;bottom:6px;right:9px;font:700 12px ui-monospace,Menlo,monospace;color:#12b0b8;background:rgba(0,0,0,.06);padding:3px 8px;border-radius:8px;z-index:99">fotos v1</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/dist/face-api.js"></script>
+<script>
+/* ============================================================================
+   ENROLAR DESDE FOTOS (admin) — carga masiva por LEGAJO.
+   Cada foto se procesa EN EL NAVEGADOR: detecta la cara, calcula el embedding
+   128-D y lo manda a recon-facial-enrolar. La foto no se sube; solo el vector.
+      enrolar-fotos.html#clave=TU_CLAVE
+   ==========================================================================*/
+const SUPABASE_URL  = "https://hrxfctzncixxqmpfhskv.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyeGZjdHpuY2l4eHFtcGZoc2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjQyNjEsImV4cCI6MjA4ODMwMDI2MX0.4L6wguch8UZGhC2VpzrWcCjJGUV-IkYsl9JoCWrOLUs";
+const MODEL_URL     = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/model";
+const CLAVE = new URLSearchParams((location.hash||"").replace(/^#/,"")).get("clave") || "";
+// Fotos fijas: podemos usar inputSize grande (más preciso) y umbral de detección bajo.
+const DET_OPTS = { inputSize: 512, scoreThreshold: 0.4 };
+
+const $ = id => document.getElementById(id);
+function show(state){ ["s-loading","s-main","s-error"].forEach(s=>$(s).classList.toggle("hidden", s!==state)); }
+function fatal(msg){ $("e-msg").innerHTML=msg; show("s-error"); }
+
+let items = []; // {file, url, legajo, nombre, rowEl, stEl, inputEl, done}
+
+async function callFn(name, body){
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/${name}`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json","apikey":SUPABASE_ANON,
+             "Authorization":"Bearer "+SUPABASE_ANON,"x-clave-dispositivo":CLAVE},
+    body:JSON.stringify(body)
+  });
+  return r.json();
+}
+function loadImage(file){
+  return new Promise((res,rej)=>{ const img=new Image();
+    img.onload=()=>res(img); img.onerror=()=>rej(new Error("img")); img.src=URL.createObjectURL(file); });
+}
+function legajoFromName(name){
+  const base=(name||"").replace(/\.[^.]+$/,"");        // sin extensión
+  const first=(base.split(/[_\-\s]+/)[0]||"");
+  if(/^[A-Za-z]{0,2}\d+$/.test(first)) return first;   // legajo tipo 254, c91, C5
+  const m=base.match(/^[A-Za-z]{0,2}\d+/); return m?m[0]:"";
+}
+
+async function init(){
+  if(!CLAVE){ fatal("Falta la clave: abrí con <b>enrolar-fotos.html#clave=TU_CLAVE</b>"); return; }
+  try{
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+  }catch(e){ fatal("No se pudieron cargar los modelos. Revisá la conexión y recargá."); return; }
+  show("s-main");
+}
+
+$("files").onchange = (ev)=>{
+  const files = Array.from(ev.target.files||[]);
+  for(const file of files){
+    if(!file.type.startsWith("image/")) continue;
+    const url = URL.createObjectURL(file);
+    const row = document.createElement("div"); row.className="row";
+    row.innerHTML =
+      `<img src="${url}" alt="">`+
+      `<div class="mid"><div class="fn">${file.name}</div>`+
+      `<input type="text" inputmode="numeric" placeholder="legajo" value="${legajoFromName(file.name)}"></div>`+
+      `<div class="st wait">—</div>`;
+    $("rows").appendChild(row);
+    const it = { file, url, legajo:"", nombre:null, rowEl:row,
+                 stEl:row.querySelector(".st"), inputEl:row.querySelector("input"), done:false };
+    it.inputEl.oninput = ()=>lookupRow(it);
+    items.push(it);
+    lookupRow(it);
+  }
+  $("btn-go").disabled = items.length===0;
+  ev.target.value = "";
+};
+
+let lookupTimers = new WeakMap();
+function lookupRow(it){
+  it.nombre=null; it.legajo=""; setSt(it,"wait","…");
+  const leg = it.inputEl.value.trim();
+  clearTimeout(lookupTimers.get(it));
+  if(!leg){ setSt(it,"wait","sin legajo"); refreshGo(); return; }
+  lookupTimers.set(it, setTimeout(async ()=>{
+    let d; try{ d=await callFn("recon-facial-nombre",{legajo:leg}); }catch(e){ setSt(it,"bad","sin red"); return; }
+    if(it.inputEl.value.trim()!==leg) return;
+    if(d.ok && d.activo!==false){ it.legajo=d.legajo; it.nombre=d.nombre; setSt(it,"ok","✓ "+shortName(d.nombre)); }
+    else if(d.ok && d.activo===false){ setSt(it,"warn","inactivo"); }
+    else if(d.error==="no_existe"){ setSt(it,"bad","no existe"); }
+    else if(d.error==="clave_invalida"){ fatal("Clave inválida. Revisá el #clave= de la URL."); }
+    else{ setSt(it,"bad","error"); }
+    refreshGo();
+  }, 350));
+}
+function shortName(n){ return (n||"").length>16 ? n.slice(0,15)+"…" : n; }
+function setSt(it,cls,txt){ it.stEl.className="st "+cls; it.stEl.textContent=txt; }
+function refreshGo(){ $("btn-go").disabled = !items.some(it=>it.legajo && !it.done); }
+
+async function procesar(){
+  $("btn-go").disabled=true; $("files").disabled=true;
+  let ok=0, fail=0;
+  const pend = items.filter(it=>it.legajo && !it.done);
+  for(let i=0;i<pend.length;i++){
+    const it = pend[i];
+    $("summary").textContent = `Procesando ${i+1}/${pend.length}…`;
+    setSt(it,"wait","procesando…");
+    try{
+      const img = await loadImage(it.file);
+      const det = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions(DET_OPTS))
+        .withFaceLandmarks().withFaceDescriptor();
+      if(!det){ setSt(it,"bad","sin cara"); fail++; continue; }
+      const embedding = Array.from(det.descriptor).map(Number);
+      const d = await callFn("recon-facial-enrolar",
+        { legajo: it.legajo, embedding, etiqueta: "carnet" });
+      if(d.ok){ it.done=true; setSt(it,"ok","✓ "+shortName(d.nombre)); ok++; }
+      else if(d.error==="no_existe"){ setSt(it,"bad","no existe"); fail++; }
+      else if(d.error==="inactivo"){ setSt(it,"warn","inactivo"); fail++; }
+      else if(d.error==="dim_invalida"){ setSt(it,"bad","cara dudosa"); fail++; }
+      else if(d.error==="clave_invalida"){ fatal("Clave inválida."); return; }
+      else{ setSt(it,"bad","error"); fail++; }
+    }catch(e){ setSt(it,"bad","falló"); fail++; }
+    await new Promise(r=>setTimeout(r,120));
+  }
+  $("summary").textContent = `Listo: ${ok} enroladas, ${fail} con problema.`;
+  $("files").disabled=false;
+  refreshGo();
+}
+
+$("btn-go").onclick = procesar;
+$("files").previousElementSibling; // no-op
+document.querySelector(".drop").onclick = ()=>$("files").click();
+
+init();
+</script>
+</body>
+</html>
