@@ -1,9 +1,8 @@
 # FichadaQR — Backend (Fase 1)
 
-Backend de la fichada por QR rotativo. Vive en el proyecto Supabase
-**`Control Partes Talleristas`** (`hrxfctzncixxqmpfhskv`), dentro de un **schema
-aislado `FichadaQR`** para no tocar el sistema de fichada de producción que ya
-existe en `public` (`Fichadas_Virgilio`, etc.).
+Backend de la fichada por QR rotativo. Corre en **tu** proyecto Supabase (ver
+`SETUP.md` en la raíz), dentro de un **schema aislado `FichadaQR`** para no tocar
+nada que ya exista en `public`.
 
 ## Qué hay desplegado
 
@@ -93,7 +92,7 @@ desde la IP pública del trabajo) — falta el chequeo en la función y cargar l
 > capa HTTP/Edge Functions.
 
 ```bash
-BASE="https://hrxfctzncixxqmpfhskv.supabase.co/functions/v1"
+BASE="https://TU-PROYECTO.supabase.co/functions/v1"   # ref de tu propio proyecto
 CLAVE="<pegar clave_dispositivo de FichadaQR.config>"
 
 # 1) emitir token (con la clave)

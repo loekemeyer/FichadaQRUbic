@@ -122,18 +122,11 @@ red WiFi del trabajo**. No molesta a nadie y suma una segunda barrera.
 | Mecanismo anti-fraude | **QR rotativo** en pantalla fija on-site (sin geolocalización) |
 | Dispositivo on-site | **Sí, el usuario tiene** un dispositivo para dejar fijo mostrando el QR |
 | Fuente de correos / datos | **Supabase** |
-| Organización Supabase | `Gestion Productiva` (`azosplccoimzkdtbvzfi`) |
-| Proyecto Supabase | **`Control Partes Talleristas`** (`hrxfctzncixxqmpfhskv`), en un **schema aislado `FichadaQR`** para no tocar la fichada de producción que ya vive en `public` |
+| Proyecto Supabase | El que crees vos (ver `SETUP.md`), en un **schema aislado `FichadaQR`** para no tocar nada que ya viva en `public` |
 | Coordenadas / radio en metros | **Descartado** (ya no se usa geolocalización) |
 
-### Proyectos Supabase existentes en la org (al 2026-07-16)
-
-- `Control Partes Talleristas` — `hrxfctzncixxqmpfhskv` (sa-east-1)
-- `loekemeyer's web` — `kwkclwhmoygunqmlegrg` (sa-east-1)
-- `Costos` — `fxyhvacysnqzzsdvmplx` (us-west-2)
-
-> Falta decidir si se usa un **proyecto Supabase nuevo** (ej. "FichadaQR") o uno
-> de estos existentes.
+> Montá tu propio proyecto Supabase siguiendo `SETUP.md`. Este repo no queda atado
+> a ningún proyecto concreto.
 
 ---
 

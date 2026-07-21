@@ -1,8 +1,7 @@
 -- ============================================================================
--- FichadaQR — Fase 1 (MVP) — esquema aislado dentro de "Control Partes Talleristas"
+-- FichadaQR — Fase 1 (MVP) — esquema aislado en tu proyecto Supabase
 -- ----------------------------------------------------------------------------
--- Todo vive en el schema "FichadaQR" para NO tocar el sistema de fichada de
--- producción que ya existe en public (Fichadas_Virgilio, Empleados, etc.).
+-- Todo vive en el schema "FichadaQR" para NO tocar nada que ya exista en public.
 -- El schema NO se expone en PostgREST; las Edge Functions entran por conexión
 -- directa a Postgres con service_role (que ignora RLS).
 -- ============================================================================

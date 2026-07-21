@@ -96,8 +96,8 @@
    128-D y lo manda a recon-facial-enrolar. La foto no se sube; solo el vector.
       enrolar-fotos.html#clave=TU_CLAVE
    ==========================================================================*/
-const SUPABASE_URL  = "https://hrxfctzncixxqmpfhskv.supabase.co";
-const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyeGZjdHpuY2l4eHFtcGZoc2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjQyNjEsImV4cCI6MjA4ODMwMDI2MX0.4L6wguch8UZGhC2VpzrWcCjJGUV-IkYsl9JoCWrOLUs";
+const SUPABASE_URL  = "https://TU-PROYECTO.supabase.co"; // ← URL de TU proyecto Supabase (ver SETUP.md)
+const SUPABASE_ANON = "TU_ANON_KEY";                     // ← anon/public key de TU proyecto (ver SETUP.md)
 const MODEL_URL     = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/model";
 const CLAVE = new URLSearchParams((location.hash||"").replace(/^#/,"")).get("clave") || "";
 // Para fotos fijas se usa ssdMobilenetv1 (detector mucho mejor que tiny en imágenes).
