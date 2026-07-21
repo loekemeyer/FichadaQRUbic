@@ -1,42 +1,26 @@
 -- ============================================================================
--- FICHADA FACIAL — Setup completo en UN solo archivo.
+-- PASO 2 — FICHADA FACIAL (el motor de reconocimiento)
 -- ----------------------------------------------------------------------------
--- Pegá TODO esto en:  Supabase → tu proyecto → SQL Editor → New query → Run.
--- Crea todo lo necesario y NO depende de ningún otro sistema.
+-- Corré esto DESPUÉS del archivo 1 (necesita que exista planify.employees).
+-- Pegá TODO esto en:  Supabase → SQL Editor → New query → Run.
 --
 -- Qué hace:
 --   * Guarda SOLO el vector matemático de cada cara (128 números), NUNCA la foto.
 --   * El reconocimiento (match) se hace en el servidor: la base de caras nunca
 --     sale de Supabase.
+--   * Toma el nombre de cada persona desde planify.employees (archivo 1).
 --   * Todo protegido por una CLAVE DE DISPOSITIVO que se genera sola acá abajo.
 --
 -- Es seguro correrlo más de una vez (no borra datos ni duplica nada).
 -- ============================================================================
 
--- Schema propio y aislado (no toca nada más del proyecto).
+-- Schema propio y aislado para lo del facial (no toca planify ni nada más).
 create schema if not exists reconocimiento_facial;
 
 -- pgvector: permite comparar caras por distancia dentro de la base.
 create extension if not exists vector with schema extensions;
 
--- ---------------------------------------------------------------------------
--- Empleados (lista propia). El legajo es cualquier identificador que elijas
--- (un número, un apodo, lo que sea). Se crean solos al enrolar, así que no
--- hace falta cargar nada a mano.
--- ---------------------------------------------------------------------------
-create table if not exists reconocimiento_facial.empleados (
-  legajo    text not null,
-  nombre    text not null,
-  activo    boolean not null default true,
-  creado_en timestamptz not null default now()
-);
--- Legajo único ignorando mayúsculas/espacios (así "Juan " y "juan" son el mismo).
-create unique index if not exists empleados_legajo_ci
-  on reconocimiento_facial.empleados (lower(btrim(legajo)));
-
--- ---------------------------------------------------------------------------
 -- Rostros: N vectores por empleado (varias fotos = reconocimiento más robusto).
--- ---------------------------------------------------------------------------
 create table if not exists reconocimiento_facial.rostros (
   id        bigint generated always as identity primary key,
   legajo    text not null,
@@ -49,10 +33,8 @@ create index if not exists rostros_legajo_idx
 create index if not exists rostros_embedding_l2_idx
   on reconocimiento_facial.rostros using hnsw (embedding extensions.vector_l2_ops);
 
--- ---------------------------------------------------------------------------
 -- Fichadas: 1 por día por persona (a prueba de dobles). Guarda el nombre para
 -- que el reporte se lea solo.
--- ---------------------------------------------------------------------------
 create table if not exists reconocimiento_facial.fichadas (
   id        bigint generated always as identity primary key,
   legajo    text not null,
@@ -62,10 +44,8 @@ create table if not exists reconocimiento_facial.fichadas (
   unique (legajo, fecha)
 );
 
--- ---------------------------------------------------------------------------
--- Config del kiosco: clave de dispositivo (se genera sola), umbral de match y
--- si exige "prueba de vida" (parpadeo) para evitar fichar con una foto.
--- ---------------------------------------------------------------------------
+-- Config del kiosco: clave de dispositivo (se genera sola), umbral de match y si
+-- exige "prueba de vida" (parpadeo) para no fichar con una foto.
 create table if not exists reconocimiento_facial.config (
   id                integer primary key default 1,
   clave_dispositivo text not null,
@@ -78,24 +58,20 @@ insert into reconocimiento_facial.config (id, clave_dispositivo)
 values (1, substr(replace(gen_random_uuid()::text, '-', ''), 1, 20))
 on conflict (id) do nothing;
 
--- RLS: nadie puede leer/escribir estas tablas directamente con la clave pública.
--- Solo se accede a través de las funciones de abajo (que validan la clave).
-alter table reconocimiento_facial.empleados enable row level security;
 alter table reconocimiento_facial.rostros   enable row level security;
 alter table reconocimiento_facial.fichadas  enable row level security;
 alter table reconocimiento_facial.config    enable row level security;
 
 -- ===========================================================================
--- LÓGICA (funciones). Corren con permisos elevados (SECURITY DEFINER) pero cada
--- una exige la clave de dispositivo antes de hacer nada.
+-- LÓGICA. Cada función exige la clave de dispositivo antes de hacer nada.
 -- ===========================================================================
 
--- Datos del empleado por legajo (nombre + activo).
+-- Datos del empleado por legajo -> los toma de TU planify (archivo 1).
 create or replace function reconocimiento_facial.empleado_por_legajo(p_legajo text)
 returns table (nombre text, activo boolean)
 language sql stable set search_path = '' as $$
   select e.nombre, e.activo
-  from reconocimiento_facial.empleados e
+  from planify.employees e
   where lower(btrim(e.legajo)) = lower(btrim(p_legajo))
   limit 1
 $$;
@@ -134,8 +110,8 @@ begin
 end;
 $$;
 
--- Enrolar un rostro. Si el legajo no existe, lo crea con el nombre que se pasa
--- (así se registran los empleados solos, sin cargar nada por SQL).
+-- Enrolar un rostro. Si el legajo no existe en planify, lo crea con el nombre
+-- que se pasa (así podés registrar empleados desde la pantalla, sin cargar SQL).
 create or replace function public.recon_facial_enrolar(
   p_clave     text,
   p_legajo    text,
@@ -162,16 +138,16 @@ begin
     from reconocimiento_facial.empleado_por_legajo(v_legajo);
 
   if v_exist is null then
-    -- empleado nuevo: hace falta el nombre
+    -- empleado nuevo: se agrega a planify (hace falta el nombre)
     if v_nombre = '' then return json_build_object('error','falta_nombre'); end if;
-    insert into reconocimiento_facial.empleados (legajo, nombre, activo)
+    insert into planify.employees (legajo, nombre, activo)
     values (v_legajo, v_nombre, true)
     on conflict (lower(btrim(legajo)))
       do update set nombre = excluded.nombre, activo = true;
   else
-    -- existente: si mandaron un nombre distinto, lo actualiza
+    -- existente: si mandaron un nombre distinto, lo actualiza en planify
     if v_nombre <> '' and v_nombre <> v_exist then
-      update reconocimiento_facial.empleados
+      update planify.employees
          set nombre = v_nombre
        where lower(btrim(legajo)) = lower(btrim(v_legajo));
     else
@@ -288,7 +264,7 @@ end;
 $$;
 
 -- Borrar todos los rostros de un legajo (derecho al olvido / dar de baja).
--- Se corre a mano desde el SQL Editor:  select public.recon_facial_baja('132');
+-- Se corre a mano desde el SQL Editor:  select public.recon_facial_baja('1');
 create or replace function public.recon_facial_baja(p_legajo text)
 returns json language plpgsql security definer set search_path = '' as $$
 declare v_legajo text := btrim(coalesce(p_legajo, '')); v_n int;
@@ -304,8 +280,7 @@ $$;
 -- ===========================================================================
 -- PERMISOS
 -- La clave pública (anon) solo puede LLAMAR estas 4 funciones — y cada una pide
--- la clave de dispositivo. NO puede leer las tablas directamente.
--- recon_facial_baja NO se expone (solo se corre a mano desde el SQL Editor).
+-- la clave de dispositivo. NO puede leer las tablas ni la lista directamente.
 -- ===========================================================================
 revoke all on function reconocimiento_facial.match_cercano(extensions.vector)  from public;
 revoke all on function reconocimiento_facial.empleado_por_legajo(text)         from public;
@@ -318,7 +293,7 @@ grant execute on function public.recon_facial_fichar(text, real[], boolean, real
 revoke all on function public.recon_facial_baja(text) from public, anon, authenticated;
 
 -- ===========================================================================
--- LISTO. Ahora corré esto para ver TU clave de dispositivo (la vas a necesitar):
+-- LISTO. Corré esto para ver TU clave de dispositivo (la vas a necesitar):
 -- ===========================================================================
 select clave_dispositivo as tu_clave_de_dispositivo
 from reconocimiento_facial.config where id = 1;
