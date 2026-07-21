@@ -86,7 +86,7 @@
     Dato biométrico sensible (Ley 25.326): usar con consentimiento.</footer>
 </div>
 
-<div style="position:fixed;bottom:6px;right:9px;font:700 12px ui-monospace,Menlo,monospace;color:#12b0b8;background:rgba(0,0,0,.06);padding:3px 8px;border-radius:8px;z-index:99">fotos v2</div>
+<div style="position:fixed;bottom:6px;right:9px;font:700 12px ui-monospace,Menlo,monospace;color:#12b0b8;background:rgba(0,0,0,.06);padding:3px 8px;border-radius:8px;z-index:99">fotos v3</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/dist/face-api.js"></script>
 <script>
@@ -100,8 +100,7 @@ const SUPABASE_URL  = "https://hrxfctzncixxqmpfhskv.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhyeGZjdHpuY2l4eHFtcGZoc2t2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3MjQyNjEsImV4cCI6MjA4ODMwMDI2MX0.4L6wguch8UZGhC2VpzrWcCjJGUV-IkYsl9JoCWrOLUs";
 const MODEL_URL     = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/model";
 const CLAVE = new URLSearchParams((location.hash||"").replace(/^#/,"")).get("clave") || "";
-// Fotos fijas: podemos usar inputSize grande (más preciso) y umbral de detección bajo.
-const DET_OPTS = { inputSize: 512, scoreThreshold: 0.4 };
+// Para fotos fijas se usa ssdMobilenetv1 (detector mucho mejor que tiny en imágenes).
 
 const $ = id => document.getElementById(id);
 function show(state){ ["s-loading","s-main","s-error"].forEach(s=>$(s).classList.toggle("hidden", s!==state)); }
@@ -122,6 +121,26 @@ function loadImage(file){
   return new Promise((res,rej)=>{ const img=new Image();
     img.onload=()=>res(img); img.onerror=()=>rej(new Error("img")); img.src=URL.createObjectURL(file); });
 }
+// Dibuja la foto en un canvas a tamaño real (input más confiable para face-api que un <img> suelto).
+async function fileToCanvas(file){
+  const img = await loadImage(file);
+  try{ await img.decode(); }catch(_){}
+  const cv=document.createElement("canvas");
+  cv.width = img.naturalWidth||img.width; cv.height = img.naturalHeight||img.height;
+  cv.getContext("2d").drawImage(img,0,0);
+  return cv;
+}
+// Detecta 1 cara en la foto (ssd, con reintento a menor confianza).
+async function detectFace(file){
+  const cv = await fileToCanvas(file);
+  for(const conf of [0.3, 0.15]){
+    const det = await faceapi
+      .detectSingleFace(cv, new faceapi.SsdMobilenetv1Options({ minConfidence: conf }))
+      .withFaceLandmarks().withFaceDescriptor();
+    if(det) return det;
+  }
+  return null;
+}
 function legajoFromName(name){
   const base=(name||"").replace(/\.[^.]+$/,"");        // sin extensión
   const first=(base.split(/[_\-\s]+/)[0]||"");
@@ -132,7 +151,7 @@ function legajoFromName(name){
 async function init(){
   if(!CLAVE){ fatal("Falta la clave: abrí con <b>enrolar-fotos.html#clave=TU_CLAVE</b>"); return; }
   try{
-    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
     await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
     await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
   }catch(e){ fatal("No se pudieron cargar los modelos. Revisá la conexión y recargá."); return; }
@@ -191,9 +210,7 @@ async function procesar(){
     $("summary").textContent = `Procesando ${i+1}/${pend.length}…`;
     setSt(it,"wait","procesando…");
     try{
-      const img = await loadImage(it.file);
-      const det = await faceapi.detectSingleFace(img, new faceapi.TinyFaceDetectorOptions(DET_OPTS))
-        .withFaceLandmarks().withFaceDescriptor();
+      const det = await detectFace(it.file);
       if(!det){ setSt(it,"bad","sin cara"); fail++; continue; }
       const embedding = Array.from(det.descriptor).map(Number);
       const d = await callFn("recon-facial-enrolar",

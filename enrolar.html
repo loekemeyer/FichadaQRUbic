@@ -81,6 +81,7 @@
       <div id="hit" class="hit wait hidden"></div>
 
       <div class="stage"><video id="video" playsinline muted></video></div>
+      <button type="button" id="btn-cam" style="display:block;width:100%;margin:8px 0 0;background:none;border:none;color:var(--accent-ink);font:600 13px var(--sans);cursor:pointer;text-decoration:underline">🔄 Cambiar cámara (frente ⇄ atrás, para el carnet)</button>
       <div class="dots" id="dots"></div>
       <p class="status" id="status">Escribí el legajo para ver de quién es.</p>
 
@@ -100,7 +101,7 @@
     Dato biométrico sensible (Ley 25.326): enrolar con consentimiento.</footer>
 </div>
 
-<div style="position:fixed;bottom:6px;right:9px;font:700 12px ui-monospace,Menlo,monospace;color:#12b0b8;background:rgba(0,0,0,.06);padding:3px 8px;border-radius:8px;z-index:99">enrolar v3</div>
+<div style="position:fixed;bottom:6px;right:9px;font:700 12px ui-monospace,Menlo,monospace;color:#12b0b8;background:rgba(0,0,0,.06);padding:3px 8px;border-radius:8px;z-index:99">enrolar v4</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/dist/face-api.js"></script>
 <script>
@@ -116,7 +117,7 @@ const MODEL_URL     = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/mod
 const CLAVE = new URLSearchParams((location.hash||"").replace(/^#/,"")).get("clave") || "";
 
 const DET_OPTS = { inputSize: 320, scoreThreshold: 0.5 };
-const MIN_FACE = 0.22;
+const MIN_FACE = 0.16;   // el carnet ocupa menos de la pantalla que una cara en vivo
 const TARGET   = 4;
 
 const $ = id => document.getElementById(id);
@@ -124,7 +125,7 @@ function show(state){ ["s-loading","s-form","s-error"].forEach(s=>$(s).classList
 function fatal(title,msg){ $("e-title").textContent=title; $("e-msg").innerHTML=msg; show("s-error"); }
 function setHit(cls,msg,hide){ const h=$("hit"); h.className="hit "+cls+(hide?" hidden":""); h.textContent=msg||""; }
 
-let video, stream, captured=0, busy=false;
+let video, stream, captured=0, busy=false, facing="user";
 let resolvedLegajo=null, resolvedNombre=null, lookupTimer=null;
 
 function paintDots(){
@@ -154,12 +155,21 @@ async function init(){
     await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
     await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
   }catch(e){ fatal("No se pudieron cargar los modelos","Revisá la conexión y recargá."); return; }
-  try{
-    $("loading-msg").textContent = "Encendiendo la cámara…";
-    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user" }, audio:false });
-    video = $("video"); video.srcObject = stream; await video.play();
-  }catch(e){ fatal("Sin acceso a la cámara","Permití la cámara y recargá."); return; }
+  video = $("video");
+  $("loading-msg").textContent = "Encendiendo la cámara…";
+  if(!(await startCamera())){ fatal("Sin acceso a la cámara","Permití la cámara y recargá."); return; }
   paintDots(); show("s-form"); $("legajo").focus();
+}
+
+// Abre (o reabre) la cámara con la orientación elegida. Espeja solo la de frente.
+async function startCamera(){
+  try{
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); }
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode: facing }, audio:false });
+    video.srcObject = stream; await video.play();
+    video.style.transform = (facing==="user") ? "scaleX(-1)" : "none";
+    return true;
+  }catch(e){ return false; }
 }
 
 // ---- Buscar el nombre por legajo mientras se escribe (debounce) ----
@@ -232,6 +242,13 @@ function done(msg){
 
 $("legajo").oninput = onLegajoInput;
 $("btn-cap").onclick = capturar;
+$("btn-cam").onclick = async ()=>{
+  const prev=facing; facing = (facing==="user") ? "environment" : "user";
+  if(!(await startCamera())){ facing=prev; await startCamera(); return; }
+  $("status").textContent = (facing==="environment")
+    ? "Cámara trasera: apuntá al carnet y tocá Capturar."
+    : "Cámara de frente.";
+};
 $("btn-reset").onclick = ()=>{
   captured=0; paintDots(); resolvedLegajo=null; resolvedNombre=null;
   $("legajo").value=""; setHit("wait","",true); $("btn-cap").disabled=true;
