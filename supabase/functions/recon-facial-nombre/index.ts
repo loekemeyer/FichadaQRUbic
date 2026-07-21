@@ -1,13 +1,9 @@
 // ============================================================================
-// Edge Function: recon-facial-enrolar
+// Edge Function: recon-facial-nombre
 // ----------------------------------------------------------------------------
-// Cáscara HTTP + CORS de la pantalla de ADMIN para enrolar rostros por LEGAJO.
-// Toda la lógica (clave de dispositivo, legajo válido y activo, guardar el
-// vector) vive en public.recon_facial_enrolar, que solo ejecuta el service_role.
-//
-// Se enrolan varios embeddings por empleado (3-5 capturas de distintos ángulos)
-// llamando a este endpoint una vez por captura. Se guarda SOLO el vector, nunca
-// la foto (dato biométrico sensible, Ley 25.326).
+// Devuelve el NOMBRE del empleado dado su LEGAJO (desde planify.employees), para
+// que la pantalla de enrolar muestre "Legajo 132 → Maturano Romina" mientras se
+// escribe. La lógica vive en public.recon_facial_nombre (solo service_role).
 //
 // Deploy con verify_jwt = false: la autorización es la clave de dispositivo.
 // ============================================================================
@@ -29,7 +25,7 @@ Deno.serve(async (req: Request) => {
     });
   if (req.method !== "POST") return json({ error: "metodo" }, 405);
 
-  let body: { legajo?: unknown; embedding?: unknown; etiqueta?: unknown; clave?: unknown };
+  let body: { legajo?: unknown; clave?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -38,28 +34,19 @@ Deno.serve(async (req: Request) => {
 
   const clave = req.headers.get("x-clave-dispositivo") ?? String(body?.clave ?? "");
   const legajo = String(body?.legajo ?? "").trim();
-  const embedding = body?.embedding;
-  const etiqueta = body?.etiqueta == null ? null : String(body.etiqueta);
-
-  if (!legajo || embedding == null) return json({ error: "faltan_datos" }, 400);
-  if (!Array.isArray(embedding) || embedding.length !== 128 ||
-      !embedding.every((n) => typeof n === "number" && Number.isFinite(n))) {
-    return json({ error: "dim_invalida" }, 400);
-  }
+  if (!legajo) return json({ error: "faltan_datos" }, 400);
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
 
-  const { data, error } = await supabase.rpc("recon_facial_enrolar", {
+  const { data, error } = await supabase.rpc("recon_facial_nombre", {
     p_clave: clave,
     p_legajo: legajo,
-    p_embedding: embedding,
-    p_etiqueta: etiqueta,
   });
   if (error) {
-    console.error("recon_facial_enrolar rpc error:", error.message);
+    console.error("recon_facial_nombre rpc error:", error.message);
     return json({ error: "error_interno" }, 500);
   }
 

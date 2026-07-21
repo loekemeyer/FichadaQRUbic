@@ -194,10 +194,10 @@ on conflict (correo) do nothing;
 ## Reconocimiento facial (backend)
 
 Backend del **kiosco de fichada por cara** (ver `FACIAL-PLAN.md`). Es un agregado
-**aislado**: reusa TODO lo de FichadaQR (la tabla `fichadas` con 1/día atómico y
-el resolutor `esta_habilitado`), y lo único nuevo —los **vectores de las caras**—
-vive en su **propio schema `reconocimiento_facial`**, para no mezclarlo con el
-sistema QR ni con producción (`public`).
+**aislado** en su **propio schema `reconocimiento_facial`**. Identifica a la gente
+por **legajo** (en `planify.employees` el legajo está cargado para todos; el email
+no). Las fichadas faciales van a su **propia tabla** `reconocimiento_facial.fichadas`
+(por legajo, 1/día) — el sistema QR sigue intacto y por correo.
 
 **Convención de naming (pedido del proyecto):** lo que puede ir en un schema va en
 `reconocimiento_facial`; lo que no (RPCs que PostgREST tiene que ver en `public`,
@@ -215,27 +215,31 @@ biométrico sensible, Ley 25.326).
 
 | Tabla | Para qué |
 |-------|----------|
-| `rostros` (`correo`, `embedding vector(128)`, `etiqueta`, `creado_en`) | N embeddings por empleado (varias fotos = match más robusto). Índice **HNSW** (L2). |
+| `rostros` (`legajo`, `embedding vector(128)`, `etiqueta`, `creado_en`) | N embeddings por empleado (varias fotos = match más robusto). Índice **HNSW** (L2). |
+| `fichadas` (`legajo`, `nombre`, `fecha`, `creado_en`) — `UNIQUE(legajo,fecha)` | Fichadas faciales, 1/día atómico (independiente del QR). |
 | `config` (`clave_dispositivo`, `umbral_distancia`, `requiere_liveness`, `metrica`) | Clave del kiosco + tunables del match |
 
 `pgvector` se instala en el schema `extensions` (misma convención que `pgcrypto`).
 
 ### Lógica (RPC en `public`, `SECURITY DEFINER`, solo `service_role`)
 
-- **`recon_facial_enrolar(p_clave, p_correo, p_embedding, p_etiqueta)`** — valida
-  clave + correo habilitado y guarda un embedding. `{ok, correo, total_rostros}`.
+- **`recon_facial_nombre(p_clave, p_legajo)`** — devuelve el **nombre** del legajo
+  (desde `planify.employees`), para mostrarlo al escribirlo. `{ok, legajo, nombre, activo}`
+  o `{error: no_existe|clave_invalida|faltan_datos}`.
+- **`recon_facial_enrolar(p_clave, p_legajo, p_embedding, p_etiqueta)`** — valida
+  clave + legajo existente y activo, guarda un embedding. `{ok, legajo, nombre, total_rostros}`.
 - **`recon_facial_resolver(p_clave, p_embedding, p_umbral)`** — preview "¿Sos vos,
-  Juan?": match server-side, devuelve el candidato **sin fichar**. `{ok, correo,
-  distancia}` o `{error: sin_config|clave_invalida|faltan_datos|dim_invalida|no_match|no_habilitado}`.
+  Pérez?": match server-side, devuelve el candidato **sin fichar**. `{ok, legajo,
+  nombre, distancia}` o `{error: …|no_match|no_habilitado}`.
 - **`recon_facial_fichar(p_clave, p_embedding, p_liveness_ok, p_umbral)`** — flujo
-  completo: clave → **liveness** → match por embedding → habilitado → **1/día** →
-  INSERT en `FichadaQR.fichadas`. `{ok, correo, hora}` o `{error: sin_config|
-  clave_invalida|faltan_datos|dim_invalida|liveness|no_match|no_habilitado|ya_ficho}`.
-- **`recon_facial_baja(p_correo)`** — derecho al olvido (Ley 25.326): borra TODOS
-  los embeddings de un correo al desvincular a la persona. Admin (solo `service_role`,
-  sin Edge Function; se corre por SQL). `{ok, correo, borrados}`.
+  completo: clave → **liveness** → match por embedding → legajo activo → **1/día** →
+  INSERT en `reconocimiento_facial.fichadas`. `{ok, legajo, nombre, hora}` o `{error:
+  sin_config|clave_invalida|faltan_datos|dim_invalida|liveness|no_match|no_habilitado|ya_ficho}`.
+- **`recon_facial_baja(p_legajo)`** — derecho al olvido (Ley 25.326): borra TODOS
+  los embeddings de un legajo. Admin (solo `service_role`, sin Edge Function). `{ok, legajo, borrados}`.
 
-El helper interno del match vive en el schema: `reconocimiento_facial.match_cercano`.
+Helpers internos en el schema: `reconocimiento_facial.match_cercano` (vecino más
+cercano) y `reconocimiento_facial.empleado_por_legajo` (nombre/activo por legajo).
 
 ### Edge Functions (cáscara HTTP + CORS, `verify_jwt = false`)
 
@@ -243,8 +247,10 @@ El helper interno del match vive en el schema: `reconocimiento_facial.match_cerc
   liveness_ok:boolean, umbral?}` + header `x-clave-dispositivo`.
 - **`recon-facial-resolver`** → `recon_facial_resolver`. Preview "¿Sos vos?" (no
   ficha). Body `{embedding:number[128], umbral?}` + header `x-clave-dispositivo`.
-- **`recon-facial-enrolar`** → `recon_facial_enrolar`. Body `{correo, embedding, etiqueta?}`
+- **`recon-facial-enrolar`** → `recon_facial_enrolar`. Body `{legajo, embedding, etiqueta?}`
   + header `x-clave-dispositivo`.
+- **`recon-facial-nombre`** → `recon_facial_nombre`. Body `{legajo}` + header
+  `x-clave-dispositivo`. Devuelve el nombre para la pantalla de enrolar.
 
 ### Frontend (páginas)
 
@@ -254,8 +260,9 @@ En la raíz del repo, **separado del QR** (se elige uno u otro desde `index.html
   detecta la cara → **liveness por parpadeo** (EAR) → calcula el embedding 128-D →
   `recon-facial-resolver` ("¿Sos vos?") → `recon-facial-fichar`. La foto nunca sale
   del dispositivo. Abrir con `kiosco.html#clave=…`.
-- **`enrolar.html`** — pantalla de admin: correo del empleado + 3–5 capturas →
-  `recon-facial-enrolar`. Abrir con `enrolar.html#clave=…`.
+- **`enrolar.html`** — pantalla de admin: escribís el **legajo**, muestra el
+  **nombre** (`recon-facial-nombre`), y tomás 3–5 capturas → `recon-facial-enrolar`.
+  Abrir con `enrolar.html#clave=…`.
 
 > Los modelos de face-api se cargan del CDN (`@vladmandic/face-api`). Para uso
 > offline, self-hostear los ~6 MB de pesos en el repo (pendiente, ver FACIAL-PLAN.md).
@@ -306,9 +313,11 @@ update reconocimiento_facial.config
 - `functions/fichada-qr-fichar/index.ts` — Edge Function (fichar).
 - `migrations/0005_reconfacial_schema.sql` — schema `reconocimiento_facial`, pgvector, `rostros` (+HNSW), `config`, RLS.
 - `migrations/0006_reconfacial_funciones.sql` — RPC `recon_facial_*` + helper de match + grants.
+- `migrations/0007_reconfacial_por_legajo.sql` — pasa de correo a **legajo**: `rostros.legajo`, tabla `fichadas`, `recon_facial_nombre`, helper `empleado_por_legajo`.
 - `functions/recon-facial-fichar/index.ts` — Edge Function (fichar por cara).
 - `functions/recon-facial-resolver/index.ts` — Edge Function (preview "¿Sos vos?").
-- `functions/recon-facial-enrolar/index.ts` — Edge Function (enrolar rostro).
+- `functions/recon-facial-enrolar/index.ts` — Edge Function (enrolar rostro por legajo).
+- `functions/recon-facial-nombre/index.ts` — Edge Function (nombre por legajo).
 
 > Las funciones SQL de QR (`fichadaqr_emitir_token`, `fichadaqr_fichar`, `b64url`)
 > se aplicaron como migración en Supabase (`fichadaqr_funciones`,

@@ -254,8 +254,8 @@ async function onCaptured(){
     text:"Revisá la conexión e intentá de nuevo."}); }
 
   if(d.ok){
-    $("c-initial").textContent = (d.correo[0]||"?").toUpperCase();
-    $("c-email").textContent = d.correo;
+    $("c-initial").textContent = ((d.nombre||"?")[0]||"?").toUpperCase();
+    $("c-email").textContent = d.nombre + " · leg. " + d.legajo;
     show("s-confirm");
     return;
   }
@@ -266,7 +266,7 @@ async function onCaptured(){
       text:"¿Estás enrolado? Pedile a administración que registre tu rostro."});
   if(d.error === "no_habilitado")
     return afterResult({icon:"✕",cls:"bad",title:"No habilitado",
-      text:"Tu cara coincide pero el correo no está habilitado. Avisá a administración."});
+      text:"Tu cara coincide pero el legajo no está activo. Avisá a administración."});
   return afterResult({icon:"✕",cls:"bad",title:"No se pudo reconocer",
     text:"Probá de nuevo en un momento."});
 }
@@ -280,7 +280,7 @@ async function fichar(){
 
   if(d.ok)
     return afterResult({icon:"✓",cls:"ok",title:"¡Fichada registrada!",time:d.hora,
-      text:`${d.correo}<br>Que tengas buen día 👋`});
+      text:`${d.nombre} · leg. ${d.legajo}<br>Que tengas buen día 👋`});
   if(d.error === "ya_ficho")
     return afterResult({icon:"⏱",cls:"warn",title:"Ya fichaste hoy",
       text:`Tu fichada de hoy quedó a las <b>${d.hora}</b>. Una vez por día.`});
