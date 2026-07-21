@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kiosco facial · Fichada</title>
+<style>
+  :root{
+    --bg:#eef1f2; --surface:#fff; --surface-2:#f5f8f8; --border:#d7dee0;
+    --ink:#16211f; --muted:#5c6b6a; --accent:#0d7d84; --accent-ink:#0a5f65;
+    --ok:#15803d; --ok-bg:#e7f4ec; --warn:#b45309; --warn-bg:#fbf0e2;
+    --bad:#b91c1c; --bad-bg:#fbe9e9;
+    --shadow:0 1px 2px rgba(16,33,31,.06),0 10px 30px rgba(16,33,31,.08);
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0c1315; --surface:#141e21; --surface-2:#182529; --border:#26343a;
+    --ink:#e8f0ef; --muted:#94a5a4; --accent:#2bb7bf; --accent-ink:#7fdce0;
+    --ok:#34d399; --ok-bg:#12241c; --warn:#f0a44a; --warn-bg:#241a10;
+    --bad:#f87171; --bad-bg:#251316;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.4);}}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;display:grid;place-items:center;padding:24px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:24px;box-shadow:var(--shadow);
+    padding:30px 30px 24px;text-align:center;max-width:440px;width:100%;}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+  h1{font-size:clamp(20px,5vw,26px);margin:8px 0 4px;letter-spacing:-.4px;}
+  .sub{margin:0;color:var(--muted);font-size:14px;}
+  .stage{position:relative;width:min(320px,74vw);height:min(320px,74vw);margin:22px auto 8px;}
+  .stage video{width:100%;height:100%;object-fit:cover;border-radius:50%;background:#000;
+    transform:scaleX(-1);border:1px solid var(--border);}
+  .ring{position:absolute;inset:-7px;pointer-events:none}
+  .ring circle{fill:none;stroke-width:7;stroke-linecap:round}
+  .ring .track{stroke:var(--border)}
+  .ring .prog{stroke:var(--accent);transition:stroke-dashoffset .2s linear}
+  .status{min-height:22px;margin:6px 0 2px;font-size:15px;font-weight:600;color:var(--accent-ink);}
+  .hint{margin:0;color:var(--muted);font-size:12.5px;}
+  .btnrow{display:flex;gap:10px;margin-top:16px}
+  .btn{flex:1;border:none;border-radius:12px;font-family:var(--sans);font-size:15px;font-weight:650;
+    padding:14px;cursor:pointer;transition:.15s;}
+  .btn-primary{background:var(--accent);color:#fff;box-shadow:var(--shadow);}
+  .btn-primary:active{transform:translateY(1px)}
+  .btn-ghost{background:var(--surface-2);color:var(--muted);font-weight:600;border:1px solid var(--border);}
+  .avatar{width:66px;height:66px;border-radius:50%;background:var(--surface-2);border:1px solid var(--border);
+    display:grid;place-items:center;margin:6px auto 12px;font-size:28px;font-weight:700;color:var(--accent-ink);}
+  .email{font-family:var(--mono);font-size:14px;color:var(--accent-ink);word-break:break-all;
+    background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:12px 0 2px;}
+  .badge{width:78px;height:78px;border-radius:50%;display:grid;place-items:center;margin:6px auto 12px;font-size:40px;}
+  .badge.ok{background:var(--ok-bg);color:var(--ok)} .badge.warn{background:var(--warn-bg);color:var(--warn)}
+  .badge.bad{background:var(--bad-bg);color:var(--bad)}
+  .big-time{font-family:var(--mono);font-size:30px;font-weight:700;margin:8px 0 2px}
+  .foot{margin-top:18px;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .hidden{display:none!important}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+  <div class="card">
+    <span class="eyebrow">Fichada · Reconocimiento facial</span>
+
+    <div id="s-loading">
+      <h1>Preparando el kiosco…</h1>
+      <div class="avatar">◴</div>
+      <p class="sub" id="loading-msg">Cargando el reconocimiento facial…</p>
+    </div>
+
+    <div id="s-scan" class="hidden">
+      <h1>Fichá con tu cara</h1>
+      <div class="stage">
+        <video id="video" playsinline muted></video>
+        <svg class="ring" viewBox="0 0 320 320" aria-hidden="true">
+          <circle class="track" cx="160" cy="160" r="156"></circle>
+          <circle class="prog" id="ring" cx="160" cy="160" r="156"></circle>
+        </svg>
+      </div>
+      <p class="status" id="status">Ubicate frente a la cámara</p>
+      <p class="hint">Mirá a la cámara y <b>parpadeá</b> para fichar.</p>
+    </div>
+
+    <div id="s-confirm" class="hidden">
+      <div class="avatar" id="c-initial">?</div>
+      <h1>¿Sos vos?</h1>
+      <p class="sub">Confirmá para registrar tu fichada.</p>
+      <div class="email" id="c-email">—</div>
+      <div class="btnrow">
+        <button class="btn btn-ghost" id="btn-no">No soy yo</button>
+        <button class="btn btn-primary" id="btn-si">Sí, fichar</button>
+      </div>
+    </div>
+
+    <div id="s-result" class="hidden"></div>
+
+    <div id="s-error" class="hidden">
+      <div class="badge bad">✕</div>
+      <h1 id="e-title">No se pudo iniciar</h1>
+      <p class="sub" id="e-msg"></p>
+      <div class="btnrow" id="e-actions"></div>
+    </div>
+
+    <p class="foot">La cámara procesa todo <b>en este dispositivo</b>: nunca se sube tu foto,
+      solo se compara un vector. Una fichada por día.</p>
+  </div>
+
+<!-- face-api.js (corre 100% en el navegador). -->
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/dist/face-api.js"></script>
+<!-- TU config (SUPABASE_URL / SUPABASE_ANON) -->
+<script src="config.js"></script>
+<script>
+/* ============================================================================
+   KIOSCO FACIAL. El match se hace SERVER-SIDE en Supabase (la base de vectores
+   no sale del server): acá se calcula el embedding y se llama por RPC directo.
+
+   Abrí esta pantalla con la clave del dispositivo en la URL:
+      kiosco.html#clave=TU_CLAVE_DEL_KIOSCO
+   (la clave la ves con: select clave_dispositivo from reconocimiento_facial.config)
+   ==========================================================================*/
+const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7/model";
+const CLAVE = new URLSearchParams((location.hash||"").replace(/^#/,"")).get("clave") || "";
+
+const DET_OPTS   = { inputSize: 320, scoreThreshold: 0.5 };
+const MIN_FACE   = 0.16;
+const BLINK_DROP = 0.72;
+const BLINK_BACK = 0.85;
+const HOLD_MS    = 2000;
+const LOOP_MS    = 70;
+const RESET_MS   = 6000;
+
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r=>setTimeout(r, ms));
+function show(state){
+  ["s-loading","s-scan","s-confirm","s-result","s-error"].forEach(s=>
+    $(s).classList.toggle("hidden", s!==state));
+}
+function fatal(title,msg){ $("e-title").textContent=title; $("e-msg").innerHTML=msg; $("e-actions").innerHTML=""; show("s-error"); }
+
+let video, stream, running=false, descriptor=null, resetTimer=null;
+let earClosed=false, blinks=0, earRef=0, nearSince=0, livenessOk=false;
+
+function ear(eye){
+  const d=(a,b)=>Math.hypot(a.x-b.x, a.y-b.y);
+  return (d(eye[1],eye[5]) + d(eye[2],eye[4])) / (2*d(eye[0],eye[3]));
+}
+
+// Llamada directa a una función RPC de Supabase (sin Edge Functions).
+async function rpc(fn, params){
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`,{
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "apikey":SUPABASE_ANON,
+      "Authorization":"Bearer "+SUPABASE_ANON
+    },
+    body:JSON.stringify(params)
+  });
+  return r.json();
+}
+
+async function init(){
+  if(SUPABASE_URL.includes("TU-PROYECTO") || SUPABASE_ANON==="TU_ANON_KEY"){
+    fatal("Falta configurar Supabase",
+      "Editá <b>config.js</b> con la URL y la anon key de tu proyecto (ver GUIA.md)."); return;
+  }
+  if(!CLAVE){
+    fatal("Falta la clave del kiosco",
+      "Abrí esta pantalla con la clave en la URL:<br><b>kiosco.html#clave=TU_CLAVE</b>"); return;
+  }
+  try{
+    $("loading-msg").textContent = "Cargando el reconocimiento facial…";
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+  }catch(e){
+    fatal("No se pudieron cargar los modelos",
+      "Revisá la conexión a internet y recargá la página."); return;
+  }
+  $("loading-msg").textContent = "Encendiendo la cámara…";
+  if(!(await openCamera())){ cameraError(); return; }
+  resetToScan();
+}
+
+async function openCamera(){
+  try{
+    if(stream){ stream.getTracks().forEach(t=>t.stop()); }
+    stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:"user" }, audio:false });
+    video = $("video"); video.srcObject = stream; await video.play();
+    return true;
+  }catch(e){ return false; }
+}
+
+function cameraError(){
+  $("e-title").textContent = "Sin acceso a la cámara";
+  $("e-msg").innerHTML = "Cerrá otras <b>pestañas o apps</b> que estén usando la cámara "
+    + "(por ejemplo la de <b>Enrolar</b>) y tocá Reintentar.<br>La página tiene que abrirse por <b>https</b>.";
+  $("e-actions").innerHTML = '<button class="btn btn-primary" id="e-retry">Reintentar</button>';
+  show("s-error");
+  $("e-retry").onclick = async ()=>{
+    $("e-title").textContent = "Probando…"; $("e-actions").innerHTML = "";
+    if(await openCamera()) resetToScan(); else cameraError();
+  };
+}
+
+function resetToScan(){
+  if(resetTimer){ clearTimeout(resetTimer); resetTimer=null; }
+  descriptor=null; earClosed=false; blinks=0; earRef=0; nearSince=0; livenessOk=false; running=true;
+  $("ring").style.strokeDasharray = 2*Math.PI*156;
+  $("ring").style.strokeDashoffset = 2*Math.PI*156;
+  $("status").textContent = "Ubicate frente a la cámara";
+  show("s-scan");
+  scanLoop();
+}
+
+async function scanLoop(){
+  const RING = 2*Math.PI*156;
+  while(running){
+    let det=null;
+    try{
+      det = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions(DET_OPTS))
+        .withFaceLandmarks();
+    }catch(e){ /* frame suelto */ }
+
+    if(det){
+      const box = det.detection.box;
+      const near = box.width > video.videoWidth * MIN_FACE;
+      const e = (ear(det.landmarks.getLeftEye()) + ear(det.landmarks.getRightEye())) / 2;
+
+      earRef = earRef ? Math.max(e, earRef*0.97 + e*0.03) : e;
+      if(earRef > 0.1){
+        if(e < earRef*BLINK_DROP){ earClosed = true; }
+        else if(e > earRef*BLINK_BACK && earClosed){ earClosed = false; blinks++; }
+      }
+
+      if(near){ if(!nearSince) nearSince = Date.now(); } else { nearSince = 0; }
+      const held = near && nearSince && (Date.now() - nearSince > HOLD_MS);
+      livenessOk = blinks >= 1;
+
+      $("ring").style.strokeDashoffset = RING * (near ? (livenessOk ? 0 : .5) : 1);
+
+      if(near && (livenessOk || held)){
+        running = false;
+        $("status").textContent = "Capturando…";
+        const full = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions(DET_OPTS))
+          .withFaceLandmarks().withFaceDescriptor();
+        if(!full){ running = true; nearSince = 0; continue; }
+        descriptor = Array.from(full.descriptor).map(Number);
+        await onCaptured();
+        return;
+      }
+      $("status").textContent = near
+        ? "Parpadeá… (o quedate quieto un momento) 👁️"
+        : "Acercate un poco a la cámara";
+    }else{
+      nearSince = 0;
+      $("status").textContent = "Ubicate frente a la cámara";
+    }
+    await sleep(LOOP_MS);
+  }
+}
+
+async function onCaptured(){
+  $("status").textContent = "Reconociendo…";
+  let d;
+  try{ d = await rpc("recon_facial_resolver", { p_clave: CLAVE, p_embedding: descriptor }); }
+  catch(e){ return afterResult({icon:"✕",cls:"bad",title:"Sin conexión",
+    text:"Revisá la conexión e intentá de nuevo."}); }
+
+  if(d && d.ok){
+    $("c-initial").textContent = ((d.nombre||"?")[0]||"?").toUpperCase();
+    $("c-email").textContent = d.nombre + " · leg. " + d.legajo;
+    show("s-confirm");
+    return;
+  }
+  if(d && d.error === "clave_invalida")
+    return fatal("Clave de dispositivo inválida","Revisá el <b>#clave=</b> de la URL del kiosco.");
+  if(d && d.error === "no_match")
+    return afterResult({icon:"🙈",cls:"warn",title:"No te reconocí",
+      text:"¿Estás enrolado? Pedile a administración que registre tu rostro."});
+  if(d && d.error === "no_habilitado")
+    return afterResult({icon:"✕",cls:"bad",title:"No habilitado",
+      text:"Tu cara coincide pero el legajo está inactivo. Avisá a administración."});
+  return afterResult({icon:"✕",cls:"bad",title:"No se pudo reconocer",
+    text:"Probá de nuevo en un momento."});
+}
+
+async function fichar(){
+  $("btn-si").disabled = true; $("btn-no").disabled = true;
+  let d;
+  try{ d = await rpc("recon_facial_fichar", { p_clave: CLAVE, p_embedding: descriptor, p_liveness_ok: livenessOk }); }
+  catch(e){ d = {error:"__net"}; }
+  $("btn-si").disabled = false; $("btn-no").disabled = false;
+
+  if(d && d.ok)
+    return afterResult({icon:"✓",cls:"ok",title:"¡Fichada registrada!",time:d.hora,
+      text:`${d.nombre} · leg. ${d.legajo}<br>Que tengas buen día 👋`});
+  if(d && d.error === "ya_ficho")
+    return afterResult({icon:"⏱",cls:"warn",title:"Ya fichaste hoy",
+      text:`Tu fichada de hoy quedó a las <b>${d.hora}</b>. Una vez por día.`});
+  if(d && d.error === "liveness")
+    return afterResult({icon:"👁️",cls:"warn",title:"Probá otra vez",
+      text:"No detectamos que seas una persona en vivo. Parpadeá frente a la cámara."});
+  if(d && d.error === "no_match")
+    return afterResult({icon:"🙈",cls:"warn",title:"No te reconocí",text:"Volvé a intentar."});
+  if(d && d.error === "no_habilitado")
+    return afterResult({icon:"✕",cls:"bad",title:"No habilitado",text:"Avisá a administración."});
+  if(d && d.error === "clave_invalida")
+    return fatal("Clave de dispositivo inválida","Revisá el <b>#clave=</b> de la URL del kiosco.");
+  return afterResult({icon:"✕",cls:"bad",title:"No se pudo fichar",text:"Probá de nuevo en un momento."});
+}
+
+function afterResult({icon,cls,title,time,text}){
+  $("s-result").innerHTML =
+    `<div class="badge ${cls}">${icon}</div><h1>${title}</h1>`+
+    (time?`<div class="big-time">${time}</div>`:"")+
+    `<p class="sub">${text}</p>`+
+    `<div class="btnrow"><button class="btn btn-primary" id="r-again">Siguiente persona</button></div>`;
+  show("s-result");
+  $("r-again").onclick = resetToScan;
+  resetTimer = setTimeout(resetToScan, RESET_MS);
+}
+
+$("btn-si").onclick = fichar;
+$("btn-no").onclick = resetToScan;
+
+init();
+</script>
+</body>
+</html>
